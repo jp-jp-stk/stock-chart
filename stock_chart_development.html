@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>株価チャート</title>
+<style>
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#1c2128;--bd:#30363d;
+  --tx:#e6edf3;--mu:#8b949e;--dm:#484f58;
+  --gd:#d4a853;--gd2:#8a6d35;
+  --bull:#ef5350;--bear:#26a69a;
+  --max:1200px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{background:var(--bg);color:var(--tx);font-family:'Segoe UI',Meiryo,sans-serif;}
+body{min-height:100vh;display:flex;flex-direction:column;}
+
+header{
+  position:sticky;top:0;z-index:50;
+  height:46px;background:var(--bg2);border-bottom:1px solid var(--bd);
+  display:flex;align-items:center;gap:8px;padding:0 16px;
+}
+.logo{font-size:10px;letter-spacing:3px;color:var(--gd);font-weight:700;white-space:nowrap;}
+.ubtn{position:relative;flex-shrink:0;}
+.ubtn input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;}
+.ulabel{display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--gd2);border-radius:4px;color:var(--gd);font-size:11px;cursor:pointer;white-space:nowrap;transition:.2s;}
+.ubtn:hover .ulabel,button.ulabel:hover{background:rgba(212,168,83,.1);border-color:var(--gd);}
+button.ulabel{background:none;}
+#sname{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+#sprice{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;}
+#sprice.up{color:var(--bull);}#sprice.down{color:var(--bear);}
+#schg{font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+#schg.up{color:var(--bull);}#schg.down{color:var(--bear);}
+
+.page-body{flex:1;width:100%;max-width:var(--max);margin:0 auto;padding:0 0 60px;}
+
+.chart-section{
+  width:100%;
+  height:calc(100svh - 46px);
+  min-height:420px;
+  display:flex;flex-direction:column;
+  position:relative;
+}
+
+.cwrap{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative;}
+.pane{position:relative;overflow:hidden;}
+#pane-main{flex:1;min-height:0;}
+#pane-vol {height:13%;min-height:50px;border-top:1px solid var(--bd);}
+#pane-macd{height:18%;min-height:62px;border-top:1px solid var(--bd);}
+#pane-rsi {height:15%;min-height:56px;border-top:1px solid var(--bd);}
+#pane-sig {height:80px;flex-shrink:0;border-top:1px solid var(--bd);background:#161b22;}
+canvas{position:absolute;top:0;left:0;}
+.plabel{position:absolute;top:4px;left:8px;font-size:8px;letter-spacing:2px;color:var(--dm);pointer-events:none;z-index:2;}
+.mlegend{position:absolute;top:4px;left:8px;display:flex;gap:8px;font-size:8px;pointer-events:none;z-index:2;}
+.mli{display:flex;align-items:center;gap:3px;}
+.mld{width:8px;height:2px;border-radius:1px;}
+
+#xh-tooltip{
+  position:absolute;top:8px;left:8px;
+  background:rgba(13,17,23,0.88);border:1px solid rgba(48,54,61,0.85);
+  border-radius:5px;padding:6px 9px;pointer-events:none;
+  z-index:30;display:none;width:148px;
+  box-shadow:0 2px 10px rgba(0,0,0,.5);backdrop-filter:blur(6px);
+}
+#xh-tooltip .xh-date{font-size:10px;font-weight:600;color:var(--gd);border-bottom:1px solid rgba(48,54,61,0.6);padding-bottom:3px;margin-bottom:3px;letter-spacing:.3px;}
+#xh-tooltip .xh-row{display:flex;justify-content:space-between;align-items:baseline;line-height:1.55;}
+#xh-tooltip .xh-lbl{font-size:9px;color:var(--dm);}
+#xh-tooltip .xh-val{font-size:10px;color:var(--tx);font-variant-numeric:tabular-nums;}
+#xh-tooltip .xh-val.bull{color:var(--bull);}
+#xh-tooltip .xh-val.bear{color:var(--bear);}
+#xh-tooltip .xh-sep{border-top:1px solid rgba(48,54,61,0.55);margin:3px 0;}
+
+.sba{height:8px;background:var(--bg2);border-top:1px solid var(--bd);flex-shrink:0;position:relative;cursor:pointer;user-select:none;}
+.sbt{position:absolute;top:1.5px;height:5px;border-radius:3px;background:var(--bd);min-width:20px;transition:background .15s;}
+.sba:hover .sbt,.sba.dr .sbt{background:var(--mu);}
+
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20;background:var(--bg);}
+.ei{font-size:36px;opacity:.25;}.et{font-size:14px;color:var(--mu);}
+.es{font-size:11px;color:var(--dm);text-align:center;line-height:1.9;}
+.eh{position:relative;padding:8px 16px;border:1px dashed var(--bd);border-radius:5px;font-size:11px;color:var(--dm);cursor:pointer;transition:.2s;}
+.eh input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.eh:hover{border-color:var(--gd2);color:var(--gd);}
+
+.section{padding:32px 20px;border-top:1px solid var(--bd);}
+.section-title{font-size:13px;font-weight:600;color:var(--gd);letter-spacing:2px;text-transform:uppercase;margin-bottom:20px;display:flex;align-items:center;gap:8px;}
+.section-title::after{content:'';flex:1;height:1px;background:var(--bd);}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:11px;}
+th{text-align:left;padding:7px 10px;color:var(--dm);font-weight:500;border-bottom:1px solid var(--bd);white-space:nowrap;}
+td{padding:7px 10px;color:var(--mu);border-bottom:1px solid rgba(48,54,61,.4);font-variant-numeric:tabular-nums;white-space:nowrap;}
+tr:last-child td{border-bottom:none;}
+td.pos{color:var(--bull);}td.neg{color:var(--bear);}td.hi{color:var(--tx);font-weight:500;}
+th.th-latest{color:var(--tx);}td.latest{color:var(--tx);}
+#fin-table td:not(.hi){text-align:right;}
+#fin-table th:not(:first-child){text-align:right;}
+
+.toast{position:fixed;bottom:16px;right:16px;padding:8px 14px;background:var(--bg3);border:1px solid var(--bd);border-radius:5px;font-size:11px;z-index:100;opacity:0;transform:translateY(16px);transition:.3s;pointer-events:none;}
+.toast.show{opacity:1;transform:none;}
+.toast.ok{border-color:var(--bull);}.toast.err{border-color:var(--bear);}
+
+/* ── LOADING OVERLAY ── */
+#load-overlay{
+  position:fixed;inset:0;background:rgba(13,17,23,.92);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;z-index:200;
+}
+#load-overlay.hidden{display:none;}
+.loading-title{font-size:14px;color:var(--tx);letter-spacing:.5px;}
+.loading-bar-wrap{width:280px;height:3px;background:var(--bd);border-radius:2px;overflow:hidden;}
+.loading-bar{height:100%;background:var(--gd);border-radius:2px;transition:width .15s;width:0%;}
+.loading-sub{font-size:11px;color:var(--mu);}
+
+/* ── SC INPUT ── */
+#sc-input{
+  padding:3px 8px;border:1px solid var(--bd);border-radius:4px;
+  background:var(--bg3);color:var(--tx);font-size:12px;
+  width:96px;outline:none;transition:.2s;flex-shrink:0;
+}
+#sc-input:focus{border-color:var(--gd2);}
+#sc-input::placeholder{color:var(--dm);}
+#sc-btn{
+  padding:3px 10px;border:1px solid var(--gd2);border-radius:4px;
+  background:transparent;color:var(--gd);font-size:11px;font-weight:600;
+  cursor:pointer;transition:.2s;white-space:nowrap;flex-shrink:0;
+}
+#sc-btn:hover{background:rgba(212,168,83,.1);border-color:var(--gd);}
+
+/* ── UPLOAD MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:150;backdrop-filter:blur(2px);}
+.modal-overlay.hidden{display:none;}
+.modal-panel{background:var(--bg2);border:1px solid var(--bd);border-radius:8px;width:min(500px,92vw);max-height:85vh;overflow-y:auto;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:600;color:var(--gd);letter-spacing:1px;position:sticky;top:0;background:var(--bg2);z-index:2;}
+.modal-close{background:none;border:none;color:var(--dm);font-size:16px;cursor:pointer;padding:2px 6px;border-radius:3px;transition:.15s;line-height:1;}
+.modal-close:hover{color:var(--tx);background:var(--bg3);}
+.modal-body{padding:14px 18px;display:flex;flex-direction:column;gap:4px;}
+.file-group-label{font-size:9px;letter-spacing:2px;color:var(--dm);font-weight:600;text-transform:uppercase;margin:10px 0 5px;}
+.file-group-label:first-child{margin-top:0;}
+.file-slot{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;background:var(--bg3);border:1px solid var(--bd);}
+.slot-fname{flex:1;font-size:10px;color:var(--mu);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.slot-pick-wrap{position:relative;flex-shrink:0;}
+.slot-pick-wrap input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;}
+.slot-pick-label{display:block;padding:2px 8px;border:1px solid var(--bd);border-radius:3px;font-size:9px;color:var(--dm);white-space:nowrap;transition:.15s;user-select:none;}
+.slot-pick-wrap:hover .slot-pick-label{border-color:var(--gd2);color:var(--gd);}
+.slot-pick-wrap.selected .slot-pick-label{border-color:var(--bull);color:var(--bull);}
+.slot-status{font-size:11px;flex-shrink:0;width:22px;text-align:center;cursor:default;}
+.modal-prog-wrap{margin-top:12px;padding:8px 0;}
+.modal-prog-wrap.hidden{display:none;}
+.modal-prog-title{font-size:10px;color:var(--mu);margin-bottom:5px;font-family:monospace;}
+.modal-prog-bar-outer{height:3px;background:var(--bd);border-radius:2px;overflow:hidden;}
+.modal-prog-bar-inner{height:100%;background:var(--gd);border-radius:2px;transition:width .08s;width:0%;}
+.modal-footer{padding:10px 18px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;position:sticky;bottom:0;background:var(--bg2);}
+.modal-start-btn{padding:6px 20px;border:1px solid var(--gd2);border-radius:4px;background:rgba(212,168,83,.1);color:var(--gd);font-size:12px;font-weight:600;cursor:pointer;transition:.2s;}
+.modal-start-btn:hover:not(:disabled){background:rgba(212,168,83,.2);border-color:var(--gd);}
+.modal-start-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* ── TOOLBAR ── */
+.tf-bar{display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg2);border-bottom:1px solid var(--bd);flex-shrink:0;flex-wrap:wrap;}
+.tf-btn{padding:2px 10px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.5px;border:1px solid var(--bd);background:transparent;color:var(--dm);cursor:pointer;transition:.15s;}
+.tf-btn:not(:disabled):hover{border-color:var(--mu);color:var(--mu);}
+.tf-btn.active{background:rgba(212,168,83,.15);border-color:var(--gd);color:var(--gd);}
+.tf-btn:disabled{opacity:.28;cursor:not-allowed;}
+.tf-sep{width:1px;height:14px;background:var(--bd);margin:0 4px;flex-shrink:0;}
+
+@media(max-width:600px){
+  header{height:42px;padding:0 10px;gap:6px;}
+  .logo{display:none;}
+  #sprice{font-size:16px;}#schg{font-size:10px;}
+  #sname{max-width:90px;font-size:11px;}
+  .ulabel{padding:3px 8px;font-size:10px;}
+  .chart-section{height:calc(100svh - 42px);}
+  #xh-tooltip{width:132px;padding:5px 8px;}
+  #xh-tooltip .xh-lbl{font-size:8px;}#xh-tooltip .xh-val{font-size:9px;}
+  .section{padding:24px 14px;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CHART</div>
+  <input type="text" id="sc-input" placeholder="コード (例: 8306)" maxlength="6">
+  <button id="sc-btn">表示</button>
+  <div id="sname"></div>
+  <div id="sprice"></div>
+  <div id="schg"></div>
+  <div style="flex:1;min-width:4px;"></div>
+  <button class="ulabel" id="ulabel-price">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    株価データ更新
+  </button>
+  <div class="ubtn">
+    <label class="ulabel" id="fin-ulabel">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      財務データ更新
+    </label>
+    <input type="file" id="fi-fin" accept=".csv">
+  </div>
+</header>
+
+<div class="page-body">
+
+  <div class="chart-section">
+    <div class="tf-bar">
+      <button class="tf-btn" id="tf-btn-d" disabled>日足</button>
+      <button class="tf-btn" id="tf-btn-w" disabled>週足</button>
+      <div class="tf-sep"></div>
+      <button class="tf-btn active" id="ind-ma">MA</button>
+      <button class="tf-btn" id="ind-bb">BB</button>
+      <div class="tf-sep"></div>
+      <button class="tf-btn active" id="ind-vol">出来高</button>
+      <button class="tf-btn active" id="ind-macd">MACD</button>
+      <button class="tf-btn" id="ind-rsi">RSI</button>
+    </div>
+    <div class="cwrap" id="cwrap">
+
+      <div id="xh-tooltip">
+        <div class="xh-date" id="xh-date">—</div>
+        <div class="xh-row"><span class="xh-lbl">始値</span><span class="xh-val" id="xh-o">—</span></div>
+        <div class="xh-row"><span class="xh-lbl">高値</span><span class="xh-val" id="xh-h">—</span></div>
+        <div class="xh-row"><span class="xh-lbl">安値</span><span class="xh-val" id="xh-l">—</span></div>
+        <div class="xh-row"><span class="xh-lbl">終値</span><span class="xh-val" id="xh-c">—</span></div>
+        <div class="xh-row"><span class="xh-lbl">出来高</span><span class="xh-val" id="xh-v">—</span></div>
+        <div class="xh-sep" id="xh-sep-ma"></div>
+        <div id="xh-rows-ma">
+          <div class="xh-row"><span class="xh-lbl">MA5</span><span class="xh-val" id="xh-ma5">—</span></div>
+          <div class="xh-row"><span class="xh-lbl">MA25</span><span class="xh-val" id="xh-ma25">—</span></div>
+          <div class="xh-row"><span class="xh-lbl">MA75</span><span class="xh-val" id="xh-ma75">—</span></div>
+        </div>
+        <div class="xh-sep" id="xh-sep-bb" style="display:none"></div>
+        <div id="xh-rows-bb" style="display:none">
+          <div class="xh-row"><span class="xh-lbl">+2σ</span><span class="xh-val" id="xh-bb2u">—</span></div>
+          <div class="xh-row"><span class="xh-lbl">+1σ</span><span class="xh-val" id="xh-bb1u">—</span></div>
+          <div class="xh-row"><span class="xh-lbl">中線</span><span class="xh-val" id="xh-bbm">—</span></div>
+          <div class="xh-row"><span class="xh-lbl">-1σ</span><span class="xh-val" id="xh-bb1l">—</span></div>
+          <div class="xh-row"><span class="xh-lbl">-2σ</span><span class="xh-val" id="xh-bb2l">—</span></div>
+        </div>
+        <div class="xh-sep"></div>
+        <div class="xh-row"><span class="xh-lbl">MACD</span><span class="xh-val" id="xh-macd">—</span></div>
+        <div class="xh-row"><span class="xh-lbl">シグナル</span><span class="xh-val" id="xh-sig">—</span></div>
+        <div class="xh-row"><span class="xh-lbl">ヒスト</span><span class="xh-val" id="xh-hist">—</span></div>
+        <div class="xh-sep" id="xh-sep-rsi" style="display:none"></div>
+        <div id="xh-rows-rsi" style="display:none">
+          <div class="xh-row"><span class="xh-lbl">RSI(14)</span><span class="xh-val" id="xh-rsi">—</span></div>
+        </div>
+      </div>
+
+      <div class="empty" id="empty">
+        <div class="ei">📈</div>
+        <div class="et">証券コードを入力してチャートを表示</div>
+        <div class="es">ヘッダーの入力欄に証券コードを入力して<br>「表示」ボタンを押してください<br><br>初回は「株価データ更新」で<br>4つのCSVファイルを読み込んでください</div>
+      </div>
+
+      <div class="pane" id="pane-main"><div class="plabel">PRICE</div><canvas id="c-main"></canvas></div>
+      <div class="pane" id="pane-vol"><div class="plabel">VOLUME</div><canvas id="c-vol"></canvas></div>
+      <div class="pane" id="pane-macd">
+        <div class="mlegend">
+          <div class="mli"><div class="mld" style="background:#2196f3"></div><span style="color:var(--dm)">MACD</span></div>
+          <div class="mli"><div class="mld" style="background:#ff9800"></div><span style="color:var(--dm)">シグナル</span></div>
+        </div>
+        <canvas id="c-macd"></canvas>
+      </div>
+      <div class="pane" id="pane-rsi" style="display:none">
+        <div class="plabel">RSI(14)</div>
+        <canvas id="c-rsi"></canvas>
+      </div>
+      <div class="pane" id="pane-sig"><canvas id="c-sig"></canvas></div>
+      <div class="sba" id="sba"><div class="sbt" id="sbt"></div></div>
+
+    </div>
+  </div>
+
+  <div class="section" id="sec-financials">
+    <div class="section-title">財務諸表（年度別）</div>
+    <div class="table-wrap">
+      <table id="fin-table">
+        <thead><tr><th>指標</th><th>前期</th><th class="th-latest">直近期</th><th>前期比</th></tr></thead>
+        <tbody>
+          <tr><td class="hi">売上高（百万円）</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">営業利益（百万円）</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">純利益（百万円）</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">1株利益（円）</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">総資産（百万円）</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">自己資本比率</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">ROE</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">ROA</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">PER</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">PBR</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">配当金（円）</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+          <tr><td class="hi">発行済株式数（万株）</td><td>—</td><td class="latest">—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section" id="sec-notes">
+    <div class="section-title">メモ・コメント</div>
+    <div style="color:var(--dm);font-size:12px;line-height:1.9;">
+      このエリアには企業概要、投資メモ、ニュース等を自由に追加できます。<br>
+      セクションはCSVデータ連動や手動入力に対応可能です。
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div id="load-overlay" class="hidden">
+  <div id="load-title" class="loading-title"></div>
+  <div class="loading-bar-wrap"><div id="load-bar" class="loading-bar"></div></div>
+  <div id="load-sub" class="loading-sub"></div>
+</div>
+
+<div id="upload-modal" class="modal-overlay hidden">
+  <div class="modal-panel">
+    <div class="modal-header">
+      株価データ更新
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="modal-start-btn" id="modal-start-btn">一括読み込み開始</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+
+/* ═══════════════════════════════════════════
+   CSV PARSER
+═══════════════════════════════════════════ */
+function parseCSVLine(line) {
+  const result=[]; let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+    else if(ch===','&&!inQ){result.push(cur.trim());cur='';}
+    else cur+=ch;
+  }
+  result.push(cur.trim()); return result;
+}
+
+
+/* ═══════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════ */
+function fmt(n,d=1){if(n==null||isNaN(n))return'—';return n.toLocaleString('ja-JP',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function fvol(n){if(!n||isNaN(n))return'—';if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(Math.round(n));}
+function toast(msg,type='ok'){const t=$('toast');t.textContent=msg;t.className=`toast ${type} show`;clearTimeout(t._t);t._t=setTimeout(()=>{t.className='toast';},3000);}
+
+/* ═══════════════════════════════════════════
+   MATH
+═══════════════════════════════════════════ */
+function sma(arr,n){return arr.map((_,i)=>{if(i<n-1)return null;let s=0;for(let j=i-n+1;j<=i;j++)s+=arr[j];return s/n;});}
+
+function ema(arr,n){
+  const k=2/(n+1),r=new Array(arr.length).fill(null);
+  let val=null,cnt=0;
+  for(let i=0;i<arr.length;i++){
+    if(arr[i]==null)continue; cnt++;
+    if(cnt<n)continue;
+    if(val===null){let s=0,c=0;for(let j=i;c<n;j--,c++)s+=arr[j];val=s/n;}
+    else val=arr[i]*k+val*(1-k);
+    r[i]=val;
+  }
+  return r;
+}
+
+function calcMACD(c){
+  const f=ema(c,12),sl=ema(c,26);
+  const ml=c.map((_,i)=>(f[i]!=null&&sl[i]!=null)?f[i]-sl[i]:null);
+  const sig=ema(ml,9);
+  const hist=ml.map((v,i)=>(v!=null&&sig[i]!=null)?v-sig[i]:null);
+  return {ml,sig,hist};
+}
+
+function calcBB(c,n=20){
+  const mid=sma(c,n);
+  const upper2=[],upper1=[],lower1=[],lower2=[];
+  for(let i=0;i<c.length;i++){
+    if(mid[i]==null){upper2.push(null);upper1.push(null);lower1.push(null);lower2.push(null);continue;}
+    let sum=0; for(let j=i-n+1;j<=i;j++) sum+=(c[j]-mid[i])**2;
+    const sd=Math.sqrt(sum/n);
+    upper2.push(mid[i]+2*sd); upper1.push(mid[i]+sd);
+    lower1.push(mid[i]-sd);   lower2.push(mid[i]-2*sd);
+  }
+  return {mid,upper2,upper1,lower1,lower2};
+}
+
+function calcRSI(c,n=14){
+  const r=new Array(c.length).fill(null);
+  if(c.length<n+1) return r;
+  let avgG=0,avgL=0;
+  for(let i=1;i<=n;i++){const d=c[i]-c[i-1];if(d>0)avgG+=d;else avgL+=Math.abs(d);}
+  avgG/=n; avgL/=n;
+  r[n]=avgL===0?100:100-100/(1+avgG/avgL);
+  for(let i=n+1;i<c.length;i++){
+    const d=c[i]-c[i-1],g=d>0?d:0,l=d<0?Math.abs(d):0;
+    avgG=(avgG*(n-1)+g)/n; avgL=(avgL*(n-1)+l)/n;
+    r[i]=avgL===0?100:100-100/(1+avgG/avgL);
+  }
+  return r;
+}
+
+function calcSignals(){
+  const n=DATA.length;
+  const ma=new Array(n).fill(null),bb_s=new Array(n).fill(null);
+  const macd_s=new Array(n).fill(null),rsi_s=new Array(n).fill(null);
+  // MA golden/dead cross (MA5 vs MA25)
+  for(let i=1;i<n;i++){
+    if(MA5[i]==null||MA25[i]==null||MA5[i-1]==null||MA25[i-1]==null)continue;
+    if(MA5[i-1]<MA25[i-1]&&MA5[i]>=MA25[i])ma[i]='buy';
+    else if(MA5[i-1]>MA25[i-1]&&MA5[i]<=MA25[i])ma[i]='sell';
+  }
+  // BB: price crosses back inside ±2σ after being outside
+  let bBelow=false,bAbove=false;
+  for(let i=0;i<n;i++){
+    if(BB.lower2[i]==null)continue;
+    const c=DATA[i].close;
+    if(c<BB.lower2[i]){bBelow=true;bAbove=false;}
+    else if(c>BB.upper2[i]){bAbove=true;bBelow=false;}
+    else{if(bBelow){bb_s[i]='buy';bBelow=false;}else if(bAbove){bb_s[i]='sell';bAbove=false;}}
+  }
+  // MACD golden/dead cross
+  for(let i=1;i<n;i++){
+    if(MD.ml[i]==null||MD.sig[i]==null||MD.ml[i-1]==null||MD.sig[i-1]==null)continue;
+    if(MD.ml[i-1]<MD.sig[i-1]&&MD.ml[i]>=MD.sig[i])macd_s[i]='buy';
+    else if(MD.ml[i-1]>MD.sig[i-1]&&MD.ml[i]<=MD.sig[i])macd_s[i]='sell';
+  }
+  // RSI: 30/70 level cross; warn while staying in extreme zone
+  let rBelow=false,rAbove=false;
+  for(let i=0;i<n;i++){
+    const v=RSI_DATA[i];if(v==null)continue;
+    if(v<=30){rBelow=true;rAbove=false;rsi_s[i]='warn';}
+    else if(rBelow&&v>30){rsi_s[i]='buy';rBelow=false;}
+    else if(v>=70){rAbove=true;rBelow=false;rsi_s[i]='warn';}
+    else if(rAbove&&v<70){rsi_s[i]='sell';rAbove=false;}
+  }
+  SIG_DATA={ma,bb:bb_s,macd:macd_s,rsi:rsi_s};
+}
+
+/* ═══════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════ */
+let DATA=[], MA5=[], MA25=[], MA75=[], MD={ml:[],sig:[],hist:[]};
+let BB={mid:[],upper2:[],upper1:[],lower1:[],lower2:[]}, RSI_DATA=[];
+let SIG_DATA={ma:[],bb:[],macd:[],rsi:[]};
+let DATA_D=[], DATA_W=[], TFRAME='d';
+
+const IND={ma:true, bb:false, vol:true, macd:true, rsi:false};
+
+const V={barW:10,gap:2,offset:0};
+const XH={on:false,sx:0,sy:0,idx:-1};
+const bw=()=>V.barW+V.gap;
+const DPR=()=>Math.min(window.devicePixelRatio||1,2);
+
+const PAD={
+  main:{l:8,r:68,t:14,b:22},
+  vol: {l:8,r:68,t:4, b:18},
+  macd:{l:8,r:68,t:18,b:18},
+  rsi: {l:8,r:68,t:14,b:14},
+};
+
+/* ═══════════════════════════════════════════
+   CANVAS SETUP
+═══════════════════════════════════════════ */
+function prep(id){
+  const cv=$(id),pane=cv.parentElement;
+  const dpr=DPR(),w=pane.clientWidth,h=pane.clientHeight;
+  const pw=Math.round(w*dpr),ph=Math.round(h*dpr);
+  if(cv.width!==pw||cv.height!==ph){cv.width=pw;cv.height=ph;cv.style.width=w+'px';cv.style.height=h+'px';}
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  return {ctx,w,h};
+}
+
+/* ═══════════════════════════════════════════
+   VIEWPORT
+═══════════════════════════════════════════ */
+function visCnt(w,p){return Math.max(1,Math.floor((w-p.l-p.r)/bw()));}
+function clamp(o){const w=$('pane-main').clientWidth||300,v=visCnt(w,PAD.main);return Math.max(0,Math.min(Math.max(0,DATA.length-v),o));}
+function slice(w,p){const v=visCnt(w,p),s=Math.max(0,Math.round(V.offset));return{s,e:Math.min(DATA.length,s+v)};}
+function cx(i,s,l){return l+(i-s)*bw()+V.barW/2;}
+
+/* ═══════════════════════════════════════════
+   DRAW MAIN
+═══════════════════════════════════════════ */
+function drawMain(){
+  const {ctx,w,h}=prep('c-main');
+  if(!DATA.length) return;
+  const p=PAD.main,{s,e}=slice(w,p);
+  if(s>=e) return;
+  const ph=h-p.t-p.b;
+
+  // Y range
+  let lo=Infinity,hi=-Infinity;
+  for(let i=s;i<e;i++){
+    if(DATA[i].low<lo) lo=DATA[i].low;
+    if(DATA[i].high>hi) hi=DATA[i].high;
+    if(IND.ma)[MA5,MA25,MA75].forEach(ma=>{if(ma[i]!=null){if(ma[i]<lo)lo=ma[i];if(ma[i]>hi)hi=ma[i];}});
+    if(IND.bb)[BB.upper2,BB.lower2].forEach(b=>{if(b[i]!=null){if(b[i]<lo)lo=b[i];if(b[i]>hi)hi=b[i];}});
+  }
+  const rng=hi-lo||1; lo-=rng*0.06; hi+=rng*0.06;
+  const ys=v=>p.t+ph*(1-(v-lo)/(hi-lo));
+
+  // grid
+  ctx.strokeStyle='#21262d'; ctx.lineWidth=0.5;
+  for(let i=0;i<=5;i++){
+    const y=p.t+ph*i/5;
+    ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();
+    ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
+    ctx.fillText(fmt(hi-(hi-lo)*i/5),w-p.r+65,y+3.5);
+  }
+
+  // Bollinger Bands
+  if(IND.bb){
+    ctx.fillStyle='rgba(212,168,83,.06)';
+    ctx.beginPath(); let fp=true;
+    for(let i=s;i<e;i++){if(BB.upper2[i]==null)continue;const x=cx(i,s,p.l);fp?(ctx.moveTo(x,ys(BB.upper2[i])),fp=false):ctx.lineTo(x,ys(BB.upper2[i]));}
+    for(let i=e-1;i>=s;i--){if(BB.lower2[i]==null)continue;ctx.lineTo(cx(i,s,p.l),ys(BB.lower2[i]));}
+    ctx.closePath(); ctx.fill();
+    [[BB.upper2,'rgba(212,168,83,.9)',1],[BB.lower2,'rgba(212,168,83,.9)',1],
+     [BB.upper1,'rgba(212,168,83,.5)',.8],[BB.lower1,'rgba(212,168,83,.5)',.8],
+     [BB.mid,'rgba(212,168,83,.65)',1]].forEach(([arr,col,lw])=>{
+      ctx.strokeStyle=col; ctx.lineWidth=lw; ctx.beginPath(); let go=false;
+      for(let i=s;i<e;i++){if(arr[i]==null)continue;const x=cx(i,s,p.l),y=ys(arr[i]);if(!go){ctx.moveTo(x,y);go=true;}else ctx.lineTo(x,y);}
+      ctx.stroke();
+    });
+  }
+
+  // MAs
+  if(IND.ma){
+    [[MA5,'#4caf50'],[MA25,'#2196f3'],[MA75,'#e91e63']].forEach(([ma,col])=>{
+      ctx.strokeStyle=col; ctx.lineWidth=1; ctx.beginPath(); let go=false;
+      for(let i=s;i<e;i++){if(ma[i]==null)continue;const x=cx(i,s,p.l),y=ys(ma[i]);if(!go){ctx.moveTo(x,y);go=true;}else ctx.lineTo(x,y);}
+      ctx.stroke();
+    });
+  }
+
+  // Candles
+  for(let i=s;i<e;i++){
+    const d=DATA[i],bull=d.close>=d.open,col=bull?'#ef5350':'#26a69a';
+    const x=cx(i,s,p.l),yO=ys(d.open),yC=ys(d.close),yH=ys(d.high),yL=ys(d.low);
+    ctx.strokeStyle=ctx.fillStyle=col; ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x,yH);ctx.lineTo(x,yL);ctx.stroke();
+    ctx.fillRect(x-V.barW/2,Math.min(yO,yC),V.barW,Math.max(1,Math.abs(yO-yC)));
+  }
+
+  // Date labels
+  const cnt=e-s,step=Math.max(1,Math.floor(cnt/6));
+  ctx.fillStyle='#484f58'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  for(let k=0;k<cnt;k+=step){const i=s+k;ctx.fillText(DATA[i].date.replace(/^\d{4}\//,''),cx(i,s,p.l),h-p.b+13);}
+
+  // Crosshair
+  if(XH.on&&XH.idx>=0){
+    const xBar=cx(XH.idx,s,p.l);
+    ctx.strokeStyle='rgba(139,148,158,.5)'; ctx.lineWidth=0.5; ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(p.l,XH.sy);ctx.lineTo(w-p.r,XH.sy);ctx.stroke();
+    ctx.setLineDash([]);
+    const price=lo+(hi-lo)*(1-(XH.sy-p.t)/ph);
+    ctx.fillStyle='#d4a853';ctx.fillRect(w-p.r+1,XH.sy-8,65,16);
+    ctx.fillStyle='#0d1117';ctx.font='bold 10px monospace';ctx.textAlign='center';
+    ctx.fillText(fmt(price),w-p.r+1+32.5,XH.sy+3.5);
+    const d2=DATA[XH.idx];
+    if(d2){
+      const dLabel=d2.date,dW=ctx.measureText(dLabel).width+14;
+      let dx=xBar-dW/2; dx=Math.max(p.l,Math.min(w-p.r-dW,dx));
+      ctx.fillStyle='#d4a853';ctx.fillRect(dx,h-p.b+2,dW,16);
+      ctx.fillStyle='#0d1117';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+      ctx.fillText(dLabel,dx+dW/2,h-p.b+12);
+    }
+    ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+    ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DRAW VOLUME
+═══════════════════════════════════════════ */
+function drawVol(){
+  const {ctx,w,h}=prep('c-vol');
+  if(!DATA.length) return;
+  const p=PAD.vol,{s,e}=slice(w,p); if(s>=e) return;
+  const ph=h-p.t-p.b;
+  let maxV=0; for(let i=s;i<e;i++) if(DATA[i].vol>maxV) maxV=DATA[i].vol;
+  if(!maxV) return;
+  ctx.strokeStyle='#21262d';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(w-p.r,p.t);ctx.stroke();
+  ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
+  ctx.fillText(fvol(maxV),w-p.r+65,p.t+9);
+  for(let i=s;i<e;i++){
+    const d=DATA[i],bull=d.close>=d.open;
+    ctx.fillStyle=bull?'rgba(239,83,80,.55)':'rgba(38,166,154,.55)';
+    const x=cx(i,s,p.l),bh=Math.max(1,(d.vol/maxV)*ph);
+    ctx.fillRect(x-V.barW/2,h-p.b-bh,V.barW,bh);
+  }
+  if(XH.on&&XH.idx>=0){
+    const xBar=cx(XH.idx,s,p.l);
+    ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+    ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
+    const dv=DATA[XH.idx];
+    if(dv&&maxV){
+      const vy=h-p.b-(dv.vol/maxV)*ph;
+      ctx.fillStyle='#30363d';ctx.fillRect(w-p.r+1,vy-7,65,14);
+      ctx.fillStyle='#e6edf3';ctx.font='9px monospace';ctx.textAlign='center';
+      ctx.fillText(fvol(dv.vol),w-p.r+1+32.5,vy+3.5);
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DRAW MACD
+═══════════════════════════════════════════ */
+function drawMacd(){
+  const {ctx,w,h}=prep('c-macd');
+  if(!DATA.length) return;
+  const p=PAD.macd,{s,e}=slice(w,p); if(s>=e) return;
+  const ph=h-p.t-p.b;
+  const vals=[...MD.hist.slice(s,e),...MD.ml.slice(s,e),...MD.sig.slice(s,e)].filter(v=>v!=null);
+  if(!vals.length) return;
+  let lo=Math.min(...vals),hi=Math.max(...vals);
+  const rng=hi-lo||0.01; lo-=rng*0.1; hi+=rng*0.1;
+  const ys=v=>p.t+ph*(1-(v-lo)/(hi-lo)),z=ys(0);
+  ctx.strokeStyle='#21262d';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(p.l,z);ctx.lineTo(w-p.r,z);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(w-p.r,p.t);ctx.stroke();
+  for(let i=s;i<e;i++){
+    const v=MD.hist[i]; if(v==null)continue;
+    ctx.fillStyle=v>=0?'rgba(239,83,80,.72)':'rgba(38,166,154,.72)';
+    const x=cx(i,s,p.l),y=ys(v);
+    if(v>=0)ctx.fillRect(x-V.barW/2,y,V.barW,z-y);else ctx.fillRect(x-V.barW/2,z,V.barW,y-z);
+  }
+  ctx.lineWidth=1;
+  [[MD.ml,'#2196f3'],[MD.sig,'#ff9800']].forEach(([arr,col])=>{
+    ctx.strokeStyle=col;ctx.beginPath();let go=false;
+    for(let i=s;i<e;i++){const v=arr[i];if(v==null)continue;const x=cx(i,s,p.l),y=ys(v);if(!go){ctx.moveTo(x,y);go=true;}else ctx.lineTo(x,y);}
+    ctx.stroke();
+  });
+  ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
+  ctx.fillText(hi.toFixed(2),w-p.r+65,p.t+9);
+  ctx.fillText('0',w-p.r+65,z+4);
+  ctx.fillText(lo.toFixed(2),w-p.r+65,h-p.b+4);
+  if(XH.on&&XH.idx>=0){
+    const xBar=cx(XH.idx,s,p.l);
+    ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+    ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
+    const mv=MD.ml[XH.idx];
+    if(mv!=null){
+      const my=ys(mv);
+      ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r+1,my-7,65,14);
+      ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+      ctx.fillText(mv.toFixed(2),w-p.r+1+32.5,my+3.5);
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DRAW RSI
+═══════════════════════════════════════════ */
+function drawRsi(){
+  const {ctx,w,h}=prep('c-rsi');
+  if(!DATA.length) return;
+  const p=PAD.rsi,{s,e}=slice(w,p); if(s>=e) return;
+  const ph=h-p.t-p.b;
+  const ys=v=>p.t+ph*(1-(v/100));
+  const y70=ys(70),y50=ys(50),y30=ys(30);
+
+  ctx.strokeStyle='#21262d';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(w-p.r,p.t);ctx.stroke();
+
+  ctx.setLineDash([3,3]);
+  ctx.strokeStyle='rgba(38,166,154,.45)';ctx.lineWidth=0.6;
+  ctx.beginPath();ctx.moveTo(p.l,y70);ctx.lineTo(w-p.r,y70);ctx.stroke();
+  ctx.strokeStyle='rgba(239,83,80,.45)';
+  ctx.beginPath();ctx.moveTo(p.l,y30);ctx.lineTo(w-p.r,y30);ctx.stroke();
+  ctx.strokeStyle='#21262d';ctx.lineWidth=0.4;
+  ctx.beginPath();ctx.moveTo(p.l,y50);ctx.lineTo(w-p.r,y50);ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle='#ab47bc';ctx.lineWidth=1.2;ctx.beginPath();let go=false;
+  for(let i=s;i<e;i++){
+    const v=RSI_DATA[i];if(v==null)continue;
+    const x=cx(i,s,p.l),y=ys(v);
+    if(!go){ctx.moveTo(x,y);go=true;}else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
+  ctx.fillText('70',w-p.r+65,y70+3.5);
+  ctx.fillText('50',w-p.r+65,y50+3.5);
+  ctx.fillText('30',w-p.r+65,y30+3.5);
+
+  if(XH.on&&XH.idx>=0){
+    const xBar=cx(XH.idx,s,p.l);
+    ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+    ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
+    const rv=RSI_DATA[XH.idx];
+    if(rv!=null){
+      const ry=ys(rv);
+      ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r+1,ry-7,65,14);
+      ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+      ctx.fillText(rv.toFixed(1),w-p.r+1+32.5,ry+3.5);
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DRAW SIGNAL TABLE
+═══════════════════════════════════════════ */
+const SIG_ROWS=['ma','bb','macd','rsi'];
+const SIG_LABELS_MAP={ma:'MA',bb:'BB',macd:'MACD',rsi:'RSI'};
+const SIG_LW=40;
+
+function drawSig(){
+  const {ctx,w,h}=prep('c-sig');
+  const rowH=h/SIG_ROWS.length;
+
+  ctx.fillStyle='#161b22';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#21262d';ctx.lineWidth=0.5;
+  for(let r=1;r<SIG_ROWS.length;r++){
+    const y=r*rowH;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+  }
+
+  if(DATA.length){
+    const {s,e}=slice(w,PAD.main);
+    for(let i=s;i<e;i++){
+      const x=cx(i,s,PAD.main.l);
+      if(x<SIG_LW)continue;
+      SIG_ROWS.forEach((key,ri)=>{
+        const sig=SIG_DATA[key][i];
+        const cy=rowH*(ri+0.5);
+        if(sig==='buy'){ctx.fillStyle='#ef5350';ctx.beginPath();ctx.arc(x,cy,3.5,0,Math.PI*2);ctx.fill();}
+        else if(sig==='sell'){ctx.fillStyle='#26a69a';ctx.beginPath();ctx.arc(x,cy,3.5,0,Math.PI*2);ctx.fill();}
+        else if(sig==='warn'){ctx.fillStyle='#d4a853';ctx.beginPath();ctx.arc(x,cy,3.5,0,Math.PI*2);ctx.fill();}
+        else{ctx.strokeStyle='#484f58';ctx.lineWidth=0.5;ctx.beginPath();ctx.arc(x,cy,2,0,Math.PI*2);ctx.stroke();}
+      });
+    }
+    if(XH.on&&XH.idx>=0){
+      const xBar=cx(XH.idx,s,PAD.main.l);
+      if(xBar>=SIG_LW){
+        ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+        ctx.strokeRect(xBar-V.barW/2-1,0,V.barW+2,h);
+      }
+    }
+  }
+
+  // Label column overlay (masks dots behind it)
+  ctx.fillStyle='#161b22';ctx.fillRect(0,0,SIG_LW,h);
+  ctx.strokeStyle='#30363d';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(SIG_LW,0);ctx.lineTo(SIG_LW,h);ctx.stroke();
+  ctx.strokeStyle='#21262d';ctx.lineWidth=0.5;
+  for(let r=1;r<SIG_ROWS.length;r++){
+    const y=r*rowH;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(SIG_LW,y);ctx.stroke();
+  }
+  ctx.font='bold 9px monospace';ctx.textAlign='right';ctx.fillStyle='#8b949e';
+  SIG_ROWS.forEach((key,ri)=>{
+    ctx.fillText(SIG_LABELS_MAP[key],SIG_LW-6,rowH*(ri+0.5)+3.5);
+  });
+}
+
+/* ═══════════════════════════════════════════
+   DRAW ALL
+═══════════════════════════════════════════ */
+function drawAll(){
+  drawMain();
+  if(IND.vol)  drawVol();
+  if(IND.macd) drawMacd();
+  if(IND.rsi)  drawRsi();
+  drawSig();
+  updateSB();
+}
+
+/* ═══════════════════════════════════════════
+   SCROLLBAR
+═══════════════════════════════════════════ */
+function updateSB(){
+  if(!DATA.length) return;
+  const aw=$('sba').clientWidth,vis=visCnt($('pane-main').clientWidth||300,PAD.main),tot=DATA.length;
+  const tw=Math.max(20,aw*(vis/tot)),tx=tot<=vis?0:Math.min(aw-tw,(aw-tw)*(V.offset/(tot-vis)));
+  $('sbt').style.width=tw+'px'; $('sbt').style.left=tx+'px';
+}
+
+/* ═══════════════════════════════════════════
+   INFO UPDATE
+═══════════════════════════════════════════ */
+function updIB(i){}
+function updIBLast(){
+  if(!DATA.length) return;
+  const d=DATA[DATA.length-1],prev=DATA[DATA.length-2];
+  $('sprice').textContent=fmt(d.close);
+  if(prev){
+    const ch=d.close-prev.close,pct=ch/prev.close*100,sg=ch>=0?'+':'';
+    $('sprice').className='stock-price '+(ch>=0?'up':'down');
+    $('schg').textContent=`${sg}${fmt(ch)} (${sg}${pct.toFixed(2)}%)`;
+    $('schg').className='stock-chg '+(ch>=0?'up':'down');
+  }
+}
+
+/* ═══════════════════════════════════════════
+   CROSSHAIR / TOOLTIP
+═══════════════════════════════════════════ */
+function updTooltip(i){
+  const tip=$('xh-tooltip');
+  if(i<0||i>=DATA.length){tip.style.display='none';return;}
+  const d=DATA[i],ml=MD.ml[i],sg=MD.sig[i],ht=MD.hist[i],bull=d.close>=d.open;
+
+  $('xh-date').textContent=d.date+' ('+['日','月','火','水','木','金','土'][new Date(d.date.replace(/\//g,'-')).getDay()]+')';
+  $('xh-o').textContent=fmt(d.open);
+  $('xh-h').textContent=fmt(d.high);
+  $('xh-l').textContent=fmt(d.low);
+  const ce=$('xh-c');ce.textContent=fmt(d.close);ce.className='xh-val '+(bull?'bull':'bear');
+  $('xh-v').textContent=fvol(d.vol);
+
+  $('xh-sep-ma').style.display=IND.ma?'':'none';
+  $('xh-rows-ma').style.display=IND.ma?'':'none';
+  if(IND.ma){
+    $('xh-ma5').textContent =MA5[i]!=null ?fmt(MA5[i]) :'—';
+    $('xh-ma25').textContent=MA25[i]!=null?fmt(MA25[i]):'—';
+    $('xh-ma75').textContent=MA75[i]!=null?fmt(MA75[i]):'—';
+  }
+
+  $('xh-sep-bb').style.display=IND.bb?'':'none';
+  $('xh-rows-bb').style.display=IND.bb?'':'none';
+  if(IND.bb){
+    $('xh-bb2u').textContent=BB.upper2[i]!=null?fmt(BB.upper2[i]):'—';
+    $('xh-bb1u').textContent=BB.upper1[i]!=null?fmt(BB.upper1[i]):'—';
+    $('xh-bbm').textContent =BB.mid[i]!=null   ?fmt(BB.mid[i])   :'—';
+    $('xh-bb1l').textContent=BB.lower1[i]!=null?fmt(BB.lower1[i]):'—';
+    $('xh-bb2l').textContent=BB.lower2[i]!=null?fmt(BB.lower2[i]):'—';
+  }
+
+  $('xh-macd').textContent=ml!=null?ml.toFixed(2):'—';
+  $('xh-sig').textContent =sg!=null?sg.toFixed(2):'—';
+  const he=$('xh-hist');
+  he.textContent=ht!=null?ht.toFixed(2):'—';
+  he.className='xh-val'+(ht!=null?(ht>=0?' bull':' bear'):'');
+
+  $('xh-sep-rsi').style.display=IND.rsi?'':'none';
+  $('xh-rows-rsi').style.display=IND.rsi?'':'none';
+  if(IND.rsi) $('xh-rsi').textContent=RSI_DATA[i]!=null?RSI_DATA[i].toFixed(1):'—';
+
+  tip.style.display='block';
+}
+
+const ALL_PANES=['pane-main','pane-vol','pane-macd','pane-rsi','pane-sig'];
+
+function onMove(e,paneId){
+  const pane=$(paneId),r=pane.getBoundingClientRect(),localX=e.clientX-r.left;
+  XH.on=true; XH.sx=localX;
+  if(paneId==='pane-main') XH.sy=e.clientY-r.top;
+  const {s}=slice(pane.clientWidth,PAD.main);
+  const j=Math.round((localX-PAD.main.l)/bw());
+  XH.idx=Math.max(s,Math.min(DATA.length-1,s+j));
+  updIB(XH.idx); updTooltip(XH.idx); drawAll();
+}
+function onLeave(){
+  XH.on=false;XH.idx=-1;$('xh-tooltip').style.display='none';updIBLast();drawAll();
+}
+ALL_PANES.forEach(id=>{
+  $(id).addEventListener('mousemove',e=>onMove(e,id));
+  $(id).addEventListener('mouseleave',onLeave);
+});
+
+/* ═══════════════════════════════════════════
+   SCROLL / ZOOM
+═══════════════════════════════════════════ */
+let drag=false,dX=0,dO=0;
+ALL_PANES.forEach(id=>{
+  const el=$(id);
+  el.addEventListener('mousedown',e=>{drag=true;dX=e.clientX;dO=V.offset;el.style.cursor='grabbing';});
+  el.addEventListener('wheel',e=>{
+    if(e.ctrlKey||e.metaKey){
+      e.preventDefault();
+      V.barW=Math.max(3,Math.min(30,V.barW+(e.deltaY>0?-1:1)));
+      V.gap=Math.max(1,Math.round(V.barW*.2)); drawAll();
+    } else if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){
+      e.preventDefault(); V.offset=clamp(V.offset+e.deltaX/bw()); drawAll();
+    }
+  },{passive:false});
+});
+window.addEventListener('mousemove',e=>{if(!drag)return;V.offset=clamp(dO-(e.clientX-dX)/bw());$('xh-tooltip').style.display='none';drawAll();});
+window.addEventListener('mouseup',()=>{drag=false;ALL_PANES.forEach(id=>$(id).style.cursor='');});
+
+let t1=null,tO=0,tD=0,tBW=0;
+ALL_PANES.forEach(id=>{
+  const el=$(id);
+  el.addEventListener('touchstart',e=>{
+    if(e.touches.length===1){
+      t1={x:e.touches[0].clientX,y:e.touches[0].clientY,moved:false};tO=V.offset;
+      t1.timer=setTimeout(()=>{if(t1&&!t1.moved){t1.xhMode=true;showTouchXH(e.touches[0],id);}},300);
+    } else if(e.touches.length===2){
+      if(t1&&t1.timer)clearTimeout(t1.timer);hideTouchXH();
+      tD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      tBW=V.barW;tO=V.offset;
+    }
+  },{passive:true});
+  el.addEventListener('touchmove',e=>{
+    if(e.touches.length===1&&t1){
+      const dx=Math.abs(e.touches[0].clientX-t1.x),dy=Math.abs(e.touches[0].clientY-t1.y);
+      if(!t1.moved&&(dx>5||dy>5))t1.moved=true;
+      if(t1.xhMode){showTouchXH(e.touches[0],id);}
+      else{if(t1.moved&&t1.timer){clearTimeout(t1.timer);t1.timer=null;}V.offset=clamp(tO-(e.touches[0].clientX-t1.x)/bw());drawAll();}
+    } else if(e.touches.length===2){
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      V.barW=Math.max(3,Math.min(30,Math.round(tBW*(d/tD))));V.gap=Math.max(1,Math.round(V.barW*.2));drawAll();
+    }
+  },{passive:true});
+  el.addEventListener('touchend',()=>{if(t1&&t1.timer)clearTimeout(t1.timer);if(t1&&!t1.xhMode)hideTouchXH();t1=null;},{passive:true});
+});
+
+function showTouchXH(touch,paneId){
+  const pane=$(paneId),r=pane.getBoundingClientRect(),localX=touch.clientX-r.left;
+  XH.on=true;XH.sx=localX;XH.sy=touch.clientY-r.top;
+  const {s}=slice(pane.clientWidth,PAD.main);
+  XH.idx=Math.max(s,Math.min(DATA.length-1,s+Math.round((localX-PAD.main.l)/bw())));
+  updTooltip(XH.idx);drawAll();
+}
+function hideTouchXH(){XH.on=false;XH.idx=-1;$('xh-tooltip').style.display='none';drawAll();}
+
+window.addEventListener('keydown',e=>{
+  if(!DATA.length)return;
+  if(e.key==='ArrowLeft')V.offset=clamp(V.offset-3);
+  if(e.key==='ArrowRight')V.offset=clamp(V.offset+3);
+  if(e.key==='+'||e.key==='='){V.barW=Math.min(30,V.barW+1);V.gap=Math.max(1,Math.round(V.barW*.2));}
+  if(e.key==='-'){V.barW=Math.max(3,V.barW-1);V.gap=Math.max(1,Math.round(V.barW*.2));}
+  drawAll();
+});
+
+let sbOn=false,sbX=0,sbO=0;
+$('sba').addEventListener('mousedown',e=>{sbOn=true;sbX=e.clientX;sbO=V.offset;$('sba').classList.add('dr');});
+window.addEventListener('mousemove',e=>{if(!sbOn)return;const aw=$('sba').clientWidth,vis=visCnt($('pane-main').clientWidth||300,PAD.main);V.offset=clamp(sbO+(e.clientX-sbX)*((DATA.length-vis)/Math.max(1,aw)));drawAll();});
+window.addEventListener('mouseup',()=>{sbOn=false;$('sba').classList.remove('dr');});
+
+/* ═══════════════════════════════════════════
+   INDICATOR TOGGLE
+═══════════════════════════════════════════ */
+function updIndBtns(){
+  ['ma','bb','vol','macd','rsi'].forEach(k=>{
+    const btn=$('ind-'+k);if(btn)btn.className='tf-btn'+(IND[k]?' active':'');
+  });
+}
+function updPanes(){
+  $('pane-vol').style.display  =IND.vol  ?'':'none';
+  $('pane-macd').style.display =IND.macd ?'':'none';
+  $('pane-rsi').style.display  =IND.rsi  ?'':'none';
+}
+function toggleInd(key){
+  IND[key]=!IND[key];
+  updIndBtns(); updPanes(); drawAll();
+}
+['ma','bb','vol','macd','rsi'].forEach(k=>$('ind-'+k).addEventListener('click',()=>toggleInd(k)));
+
+/* ═══════════════════════════════════════════
+   LOAD DATA
+═══════════════════════════════════════════ */
+function loadData(rows,name){
+  DATA=rows;
+  const c=rows.map(r=>r.close);
+  MA5=sma(c,5);MA25=sma(c,25);MA75=sma(c,75);
+  MD=calcMACD(c); BB=calcBB(c); RSI_DATA=calcRSI(c);
+  calcSignals();
+  const w=$('pane-main').clientWidth||300;
+  V.offset=Math.max(0,DATA.length-visCnt(w,PAD.main));
+  $('empty').style.display='none';
+  if(name!=null)$('sname').textContent=name;
+  updTFBtns(); updIBLast(); drawAll();
+}
+
+/* ═══════════════════════════════════════════
+   TIMEFRAME SWITCH
+═══════════════════════════════════════════ */
+function updTFBtns(){
+  const bd=$('tf-btn-d'),bw=$('tf-btn-w');
+  bd.disabled=DATA_D.length===0; bw.disabled=DATA_W.length===0;
+  bd.className='tf-btn'+(TFRAME==='d'&&DATA_D.length?' active':'');
+  bw.className='tf-btn'+(TFRAME==='w'&&DATA_W.length?' active':'');
+}
+function switchFrame(frame){
+  const rows=frame==='d'?DATA_D:DATA_W; if(!rows.length)return;
+  TFRAME=frame; XH.on=false;XH.idx=-1;$('xh-tooltip').style.display='none';
+  loadData(rows,null);
+  updFinDisplay(currentCode);
+}
+$('tf-btn-d').addEventListener('click',()=>switchFrame('d'));
+$('tf-btn-w').addEventListener('click',()=>switchFrame('w'));
+
+
+const ro=new ResizeObserver(()=>{if(DATA.length)V.offset=clamp(V.offset);drawAll();});
+ro.observe($('pane-main'));ro.observe($('pane-vol'));ro.observe($('pane-macd'));ro.observe($('pane-rsi'));ro.observe($('pane-sig'));
+
+/* ═══════════════════════════════════════════
+   FINANCIAL DATA
+═══════════════════════════════════════════ */
+let FIN_DATA={}, currentCode=null;
+const FIN_LS_KEY='financeData';
+
+function finLoad(){try{const s=localStorage.getItem(FIN_LS_KEY);if(s)FIN_DATA=JSON.parse(s);}catch(e){}}
+function finSave(){try{localStorage.setItem(FIN_LS_KEY,JSON.stringify(FIN_DATA));}catch(e){}}
+
+
+function parseFinCSV(txt){
+  const lines=txt.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(lines.length<2)throw new Error('データ不足');
+  const hdr=parseCSVLine(lines[0]).map(h=>h.trim());
+  const findCol=name=>{
+    let i=hdr.findIndex(h=>h===name); if(i>=0)return i;
+    i=hdr.findIndex(h=>h.startsWith(name+'(')); if(i>=0)return i;
+    return hdr.findIndex(h=>h.startsWith(name));
+  };
+  const ci={
+    sc:findCol('SC'), name:findCol('名称'), period:findCol('決算期'),
+    sales:findCol('売上高'), op:findCol('営業利益'), ordinary:findCol('経常利益'),
+    net:findCol('当期利益'), assets:findCol('総資産'), equity:findCol('自己資本'),
+    equityRatio:findCol('自己資本比率'), roe:findCol('ROE'), roa:findCol('ROA'),
+    shares:findCol('発行済株式数'),
+  };
+  if(ci.sc<0)throw new Error('SC列が見つかりません');
+  const result={};
+  for(let i=1;i<lines.length;i++){
+    const c=parseCSVLine(lines[i]);
+    const sc=(c[ci.sc]||'').trim().toUpperCase(); if(!sc)continue;
+    const num=j=>{if(j<0)return null;const v=parseFloat((c[j]||'').replace(/,/g,''));return isNaN(v)?null:v;};
+    const row={
+      period:(ci.period>=0?(c[ci.period]||''):'').trim(),
+      name:(ci.name>=0?(c[ci.name]||''):'').trim(),
+      sales:num(ci.sales), op:num(ci.op), ordinary:num(ci.ordinary),
+      net:num(ci.net), assets:num(ci.assets), equity:num(ci.equity),
+      equityRatio:num(ci.equityRatio), roe:num(ci.roe), roa:num(ci.roa),
+      shares:num(ci.shares),
+    };
+    if(!result[sc])result[sc]=[];
+    result[sc].push(row);
+  }
+  if(!Object.keys(result).length)throw new Error('有効データなし');
+  for(const sc of Object.keys(result))result[sc].sort((a,b)=>a.period.localeCompare(b.period));
+  return result;
+}
+
+function fmtI(n){if(n==null||isNaN(n))return'—';return Math.round(n).toLocaleString('ja-JP');}
+function fmtD(n,d=2){if(n==null||isNaN(n))return'—';return n.toLocaleString('ja-JP',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function fmtPct(n,d=1){if(n==null||isNaN(n))return'—';return n.toLocaleString('ja-JP',{minimumFractionDigits:d,maximumFractionDigits:d})+'%';}
+function fmtX(n,d=2){if(n==null||isNaN(n))return'—';return n.toLocaleString('ja-JP',{minimumFractionDigits:d,maximumFractionDigits:d})+'倍';}
+function chgCell(curr,prev){
+  if(curr==null||prev==null||prev===0||isNaN(curr)||isNaN(prev))return{v:'—',c:''};
+  const p=(curr-prev)/Math.abs(prev)*100;
+  return{v:(p>0?'+':'')+p.toFixed(1)+'%', c:p>0?'pos':p<0?'neg':''};
+}
+
+const FIN_ROWS=[
+  ['売上高（百万円）'],['営業利益（百万円）'],['純利益（百万円）'],['1株利益（円）'],
+  ['総資産（百万円）'],['自己資本比率'],['ROE'],['ROA'],
+  ['PER'],['PBR'],['配当金（円）'],['発行済株式数（万株）'],
+];
+
+function updFinDisplay(code){
+  const thead=document.querySelector('#fin-table thead tr');
+  const tbody=document.querySelector('#fin-table tbody');
+  const latestPrice=DATA.length?DATA[DATA.length-1].close:null;
+  const company=code?FIN_DATA[code]:null;
+  if(!company||!company.length){
+    thead.innerHTML='<th>指標</th><th>前期</th><th class="th-latest">直近期</th><th>前期比</th>';
+    tbody.innerHTML=FIN_ROWS.map(([l])=>`<tr><td class="hi">${l}</td><td>—</td><td class="latest">—</td><td>—</td></tr>`).join('');
+    return;
+  }
+  const periods=company.slice(-2);
+  const prev=periods.length>=2?periods[0]:null;
+  const curr=periods[periods.length-1];
+  const derived=row=>{
+    if(!row)return null;
+    const eps=(row.net!=null&&row.shares&&row.shares>0)?row.net*1e6/row.shares:null;
+    const bps=(row.equity!=null&&row.shares&&row.shares>0)?row.equity*1e6/row.shares:null;
+    const per=(latestPrice!=null&&eps&&eps>0)?latestPrice/eps:null;
+    const pbr=(latestPrice!=null&&bps&&bps>0)?latestPrice/bps:null;
+    const sharesWan=row.shares!=null?Math.floor(row.shares/10000):null;
+    return {...row,eps,bps,per,pbr,sharesWan};
+  };
+  const pd=derived(prev), cd=derived(curr);
+  const v=(obj,fn)=>obj?fn(obj):'—';
+  const chg=(cf,pf)=>{const r=chgCell(cf(cd),pf?pf(pd):null);return`<td class="${r.c}">${r.v}</td>`;};
+  thead.innerHTML=`<th>指標</th>${pd?`<th>${pd.period}</th>`:''}<th class="th-latest">${cd.period}</th><th>前期比</th>`;
+  const rows=[
+    ['売上高（百万円）',  v(pd,o=>fmtI(o.sales)),        fmtI(cd.sales),        chg(o=>o.sales,  o=>o.sales)],
+    ['営業利益（百万円）',v(pd,o=>fmtI(o.op)),            fmtI(cd.op),           chg(o=>o.op,     o=>o.op)],
+    ['純利益（百万円）',  v(pd,o=>fmtI(o.net)),           fmtI(cd.net),          chg(o=>o.net,    o=>o.net)],
+    ['1株利益（円）',     v(pd,o=>fmtD(o.eps,2)),         fmtD(cd.eps,2),        chg(o=>o.eps,    o=>o.eps)],
+    ['総資産（百万円）',  v(pd,o=>fmtI(o.assets)),        fmtI(cd.assets),       chg(o=>o.assets, o=>o.assets)],
+    ['自己資本比率',      v(pd,o=>fmtPct(o.equityRatio)), fmtPct(cd.equityRatio),chg(o=>o.equityRatio,o=>o.equityRatio)],
+    ['ROE',               v(pd,o=>fmtPct(o.roe)),         fmtPct(cd.roe),        chg(o=>o.roe,    o=>o.roe)],
+    ['ROA',               v(pd,o=>fmtPct(o.roa)),         fmtPct(cd.roa),        chg(o=>o.roa,    o=>o.roa)],
+    ['PER',               v(pd,o=>fmtX(o.per)),           fmtX(cd.per),          chg(o=>o.per,    o=>o.per)],
+    ['PBR',               v(pd,o=>fmtX(o.pbr)),           fmtX(cd.pbr),          chg(o=>o.pbr,    o=>o.pbr)],
+    ['配当金（円）',      '—',                            '—',                   '<td>—</td>'],
+    ['発行済株式数（万株）',v(pd,o=>fmtI(o.sharesWan)),   fmtI(cd.sharesWan),    chg(o=>o.sharesWan,o=>o.sharesWan)],
+  ];
+  tbody.innerHTML=rows.map(([label,pv,cv,chgTd])=>`<tr><td class="hi">${label}</td>${pd?`<td>${pv}</td>`:''}<td class="latest">${cv}</td>${pd?chgTd:'<td>—</td>'}</tr>`).join('');
+}
+
+function handleFinFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const parsed=parseFinCSV(ev.target.result);
+      const isUpdate=Object.keys(FIN_DATA).length>0;
+      Object.assign(FIN_DATA,parsed); finSave();
+      const cnt=Object.keys(parsed).length;
+      toast(`財務データを${isUpdate?'更新':'保存'}しました（${cnt}社）`,'ok');
+      $('fin-ulabel').innerHTML='✓ 財務データ';
+      updFinDisplay(currentCode);
+    }catch(err){toast('財務エラー: '+err.message,'err');}
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+$('fi-fin').addEventListener('change',e=>handleFinFile(e.target.files[0]));
+finLoad();
+if(Object.keys(FIN_DATA).length)$('fin-ulabel').innerHTML='✓ 財務データ';
+
+/* ═══════════════════════════════════════════
+   INDEXED DB v2
+═══════════════════════════════════════════ */
+const IDB_NAME='stockChart',IDB_VER=2;
+const STORE_DAILY='dailyPrices',STORE_WEEKLY='weeklyPrices',STORE_META='fileMeta';
+
+const FILE_DEFS=[
+  {fname:'prices_2022.csv',             store:STORE_DAILY,  label:'daily_2022'},
+  {fname:'prices_2023.csv',             store:STORE_DAILY,  label:'daily_2023'},
+  {fname:'prices_2024.csv',             store:STORE_DAILY,  label:'daily_2024'},
+  {fname:'prices_2025.csv',             store:STORE_DAILY,  label:'daily_2025'},
+  {fname:'prices_2026.csv',             store:STORE_DAILY,  label:'daily_2026'},
+  {fname:'prices_weekly_2015_2020.csv', store:STORE_WEEKLY, label:'weekly_2015_2020'},
+  {fname:'prices_weekly_2021_2025.csv', store:STORE_WEEKLY, label:'weekly_2021_2025'},
+  {fname:'prices_weekly_2026.csv',      store:STORE_WEEKLY, label:'weekly_2026'},
+];
+
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(IDB_NAME,IDB_VER);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(db.objectStoreNames.contains('prices'))
+        db.deleteObjectStore('prices');
+      if(!db.objectStoreNames.contains(STORE_DAILY)){
+        const s=db.createObjectStore(STORE_DAILY,{keyPath:'key'});
+        s.createIndex('by_sc','sc',{unique:false});
+      }
+      if(!db.objectStoreNames.contains(STORE_WEEKLY)){
+        const s=db.createObjectStore(STORE_WEEKLY,{keyPath:'key'});
+        s.createIndex('by_sc','sc',{unique:false});
+      }
+      if(!db.objectStoreNames.contains(STORE_META))
+        db.createObjectStore(STORE_META,{keyPath:'label'});
+    };
+    req.onsuccess=e=>res(e.target.result);
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+
+function idbGetBySC(db,storeName,sc){
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(storeName,'readonly');
+    const req=tx.objectStore(storeName).index('by_sc').getAll(sc);
+    req.onsuccess=e=>res(e.target.result);
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+
+async function writeChunked(db,storeName,records,onProgress){
+  const CHUNK=10000;
+  for(let i=0;i<records.length;i+=CHUNK){
+    const chunk=records.slice(i,i+CHUNK);
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(storeName,'readwrite');
+      const store=tx.objectStore(storeName);
+      chunk.forEach(r=>store.put(r));
+      tx.oncomplete=()=>res();
+      tx.onerror=e=>rej(e.target.error);
+    });
+    if(onProgress)onProgress(Math.min(i+CHUNK,records.length),records.length);
+    await new Promise(r=>setTimeout(r,0));
+  }
+}
+
+function idbPutMeta(db,label,info){
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(STORE_META,'readwrite');
+    tx.objectStore(STORE_META).put({label,...info});
+    tx.oncomplete=()=>res();
+    tx.onerror=e=>rej(e.target.error);
+  });
+}
+
+function idbGetMeta(db,label){
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(STORE_META,'readonly');
+    const req=tx.objectStore(STORE_META).get(label);
+    req.onsuccess=e=>res(e.target.result);
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+
+/* ═══════════════════════════════════════════
+   KABU+ CSV PARSER (per-row records)
+═══════════════════════════════════════════ */
+// columns: SC(0),名称(1),市場(2),業種(3),日付(4),株価(5),前日比(6),前日比%(7),
+//          前日終値(8),始値(9),高値(10),安値(11),出来高(12),...
+function parseKabuToRecords(text,storeName){
+  const prefix=storeName===STORE_DAILY?'d':'w';
+  const records=[];
+  const lines=text.split('\n');
+  for(let i=1;i<lines.length;i++){
+    const line=lines[i].trim(); if(!line)continue;
+    const c=line.split(',');
+    if(c.length<13)continue;
+    const sc=c[0].trim(); if(!sc)continue;
+    const nm=c[1].trim();
+    const d=c[4].trim(); if(!d)continue;
+    const cl=parseFloat(c[5]);
+    if(isNaN(cl))continue;
+    const op=parseFloat(c[9]),hi=parseFloat(c[10]),lo=parseFloat(c[11]),vl=parseFloat(c[12]);
+    const chg=parseFloat(c[6]),chgPct=parseFloat(c[7]);
+    records.push({
+      key:`${prefix}_${sc}_${d}`,
+      sc,nm,d,
+      o:isNaN(op)?cl:op,
+      h:isNaN(hi)?cl:hi,
+      l:isNaN(lo)?cl:lo,
+      c:cl,
+      v:isNaN(vl)?0:vl,
+      chg:isNaN(chg)?null:chg,
+      chgPct:isNaN(chgPct)?null:chgPct,
+    });
+  }
+  return records;
+}
+
+function identifyFileDef(filename){
+  const lower=filename.toLowerCase();
+  return FILE_DEFS.find(fd=>fd.fname.toLowerCase()===lower)||null;
+}
+
+/* ═══════════════════════════════════════════
+   LOADING OVERLAY
+═══════════════════════════════════════════ */
+function showLoading(title,sub,pct){
+  $('load-overlay').classList.remove('hidden');
+  $('load-title').textContent=title||'';
+  $('load-sub').textContent=sub||'';
+  $('load-bar').style.width=(pct||0)+'%';
+}
+function hideLoading(){$('load-overlay').classList.add('hidden');}
+
+/* ═══════════════════════════════════════════
+   UPLOAD MODAL
+═══════════════════════════════════════════ */
+const selectedFiles={};
+
+function buildModalSlots(){
+  const body=$('modal-body');
+  body.innerHTML='';
+  const dailyDefs=FILE_DEFS.filter(fd=>fd.store===STORE_DAILY);
+  const weeklyDefs=FILE_DEFS.filter(fd=>fd.store===STORE_WEEKLY);
+
+  function addGroup(label,defs){
+    const grpLabel=document.createElement('div');
+    grpLabel.className='file-group-label';
+    grpLabel.textContent=label;
+    body.appendChild(grpLabel);
+    defs.forEach(fd=>{
+      const slot=document.createElement('div');
+      slot.className='file-slot';
+
+      const fname=document.createElement('span');
+      fname.className='slot-fname';
+      fname.textContent=fd.fname;
+
+      const pickWrap=document.createElement('div');
+      pickWrap.className='slot-pick-wrap';
+      pickWrap.id=`pick-wrap-${fd.label}`;
+
+      const inp=document.createElement('input');
+      inp.type='file'; inp.accept='.csv';
+      inp.addEventListener('change',e=>{
+        const f=e.target.files[0];
+        if(f){
+          selectedFiles[fd.label]=f;
+          pickWrap.classList.add('selected');
+          fname.textContent=f.name;
+          status.textContent='✅';
+        }
+        e.target.value='';
+      });
+
+      const pickLabel=document.createElement('span');
+      pickLabel.className='slot-pick-label';
+      pickLabel.textContent='選択';
+
+      pickWrap.appendChild(inp);
+      pickWrap.appendChild(pickLabel);
+
+      const status=document.createElement('span');
+      status.className='slot-status';
+      status.id=`status-${fd.label}`;
+      status.textContent='—';
+
+      slot.appendChild(fname);
+      slot.appendChild(pickWrap);
+      slot.appendChild(status);
+      body.appendChild(slot);
+    });
+  }
+
+  addGroup('日次データ',dailyDefs);
+  addGroup('週次データ',weeklyDefs);
+
+  const progWrap=document.createElement('div');
+  progWrap.className='modal-prog-wrap hidden';
+  progWrap.id='modal-prog-wrap';
+  progWrap.innerHTML=`<div class="modal-prog-title" id="modal-prog-title"></div>
+<div class="modal-prog-bar-outer"><div class="modal-prog-bar-inner" id="modal-prog-bar"></div></div>`;
+  body.appendChild(progWrap);
+}
+
+async function openUploadModal(){
+  Object.keys(selectedFiles).forEach(k=>delete selectedFiles[k]);
+  buildModalSlots();
+  $('upload-modal').classList.remove('hidden');
+  await checkIdbStatus();
+}
+
+function closeUploadModal(){
+  $('upload-modal').classList.add('hidden');
+}
+
+function showModalProgress(title,pct){
+  const w=$('modal-prog-wrap'),t=$('modal-prog-title'),b=$('modal-prog-bar');
+  if(!w||!t||!b)return;
+  w.classList.remove('hidden');
+  t.textContent=title;
+  b.style.width=pct+'%';
+}
+
+$('ulabel-price').addEventListener('click',openUploadModal);
+$('modal-close').addEventListener('click',closeUploadModal);
+$('upload-modal').addEventListener('click',e=>{if(e.target===$('upload-modal'))closeUploadModal();});
+
+$('modal-start-btn').addEventListener('click',async()=>{
+  const entries=Object.entries(selectedFiles);
+  if(!entries.length){toast('ファイルが選択されていません','err');return;}
+  const btn=$('modal-start-btn');
+  btn.disabled=true;
+  try{
+    const db=await idbOpen();
+    for(let i=0;i<entries.length;i++){
+      const [label,file]=entries[i];
+      const fd=FILE_DEFS.find(f=>f.label===label);
+      if(!fd)continue;
+      showModalProgress(`解析中: ${file.name}`,Math.round(i/entries.length*50));
+      await new Promise(r=>setTimeout(r,20));
+      const text=await file.text();
+      const records=parseKabuToRecords(text,fd.store);
+      await writeChunked(db,fd.store,records,(done,total)=>{
+        const pct=50+Math.round(((i+done/total)/entries.length)*50);
+        showModalProgress(`書込中: ${file.name} (${Math.round(done/total*100)}%)`,pct);
+      });
+      await idbPutMeta(db,label,{rows:records.length,fname:file.name,ts:Date.now()});
+      const statusEl=$(`status-${label}`);
+      if(statusEl)statusEl.textContent='✅';
+    }
+    toast(`株価データ更新完了（${entries.length}ファイル）`,'ok');
+    await checkIdbStatus();
+  }catch(e){
+    toast('エラー: '+e.message,'err');
+  }finally{
+    btn.disabled=false;
+    const pw=$('modal-prog-wrap');
+    if(pw)pw.classList.add('hidden');
+  }
+});
+
+/* ═══════════════════════════════════════════
+   LOAD CHART BY SC
+═══════════════════════════════════════════ */
+async function loadChartBySC(sc){
+  sc=sc.trim().toUpperCase(); if(!sc)return;
+  showLoading('データ取得中...',sc,30);
+  await new Promise(r=>setTimeout(r,30));
+  try{
+    const db=await idbOpen();
+    const [dailyRecs,weeklyRecs]=await Promise.all([
+      idbGetBySC(db,STORE_DAILY,sc),
+      idbGetBySC(db,STORE_WEEKLY,sc),
+    ]);
+    hideLoading();
+    if(!dailyRecs.length&&!weeklyRecs.length){
+      toast(`証券コード ${sc} のデータが見つかりません`,'err');return;
+    }
+    function toRow(r){
+      return{date:r.d,ts:new Date(r.d.replace(/\//g,'-')).getTime(),
+        open:r.o,high:r.h,low:r.l,close:r.c,vol:r.v};
+    }
+    const daily=dailyRecs.map(toRow).sort((a,b)=>a.ts-b.ts);
+    const weekly=weeklyRecs.map(toRow).sort((a,b)=>a.ts-b.ts);
+    const name=dailyRecs[0]?.nm||weeklyRecs[0]?.nm||sc;
+    currentCode=sc;
+    DATA_D=daily; DATA_W=weekly;
+    TFRAME='d';
+    XH.on=false;XH.idx=-1;$('xh-tooltip').style.display='none';
+    loadData(daily.length?daily:weekly,name);
+    updFinDisplay(currentCode);
+    if(!daily.length)toast('日足データなし・週足で表示','ok');
+  }catch(e){
+    hideLoading();
+    toast('エラー: '+e.message,'err');
+  }
+}
+
+/* ═══════════════════════════════════════════
+   IDB STATUS CHECK
+═══════════════════════════════════════════ */
+async function checkIdbStatus(){
+  try{
+    const db=await idbOpen();
+    let found=0;
+    for(const fd of FILE_DEFS){
+      const meta=await idbGetMeta(db,fd.label);
+      const has=meta&&meta.rows>0;
+      if(has)found++;
+      const el=$(`status-${fd.label}`);
+      if(el)el.textContent=has?'✅':'—';
+    }
+    const svg=`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+    $('ulabel-price').innerHTML=found>0
+      ?`${svg}✓ 株価(${found}/${FILE_DEFS.length})`
+      :`${svg}株価データ更新`;
+  }catch(e){}
+}
+
+/* ═══════════════════════════════════════════
+   EVENT LISTENERS
+═══════════════════════════════════════════ */
+$('sc-btn').addEventListener('click',()=>{
+  const sc=$('sc-input').value.trim();
+  if(sc)loadChartBySC(sc);
+});
+$('sc-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){const sc=$('sc-input').value.trim();if(sc)loadChartBySC(sc);}
+});
+
+checkIdbStatus();
+</script>
+</body>
+</html>

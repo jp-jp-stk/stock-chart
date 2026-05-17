@@ -1,0 +1,61 @@
+# 認証情報（絶対にGitHubにアップロードしない）
+config.txt
+
+# Claude Code内部設定
+.claude/
+
+# 生データ（容量大）
+data/daily/
+
+# 年次日次データ（容量大・IndexedDBで管理）
+data/merged/prices_2015.csv
+data/merged/prices_2016.csv
+data/merged/prices_2017.csv
+data/merged/prices_2018.csv
+data/merged/prices_2019.csv
+data/merged/prices_2020.csv
+data/merged/prices_2021.csv
+data/merged/prices_2022.csv
+data/merged/prices_2023.csv
+data/merged/prices_2024.csv
+data/merged/prices_2025.csv
+
+# 年次週次データ（中間ファイル・容量大）
+data/merged/prices_2015_weekly.csv
+data/merged/prices_2016_weekly.csv
+data/merged/prices_2017_weekly.csv
+data/merged/prices_2018_weekly.csv
+data/merged/prices_2019_weekly.csv
+data/merged/prices_2020_weekly.csv
+data/merged/prices_2021_weekly.csv
+data/merged/prices_2022_weekly.csv
+data/merged/prices_2023_weekly.csv
+data/merged/prices_2024_weekly.csv
+data/merged/prices_2025_weekly.csv
+data/merged/prices_2026_weekly.csv
+
+# 統合週次データ（容量大・IndexedDBで管理）
+data/merged/prices_weekly_2015_2020.csv
+data/merged/prices_weekly_2021_2025.csv
+
+# 中間ファイル
+data/merged/prices_2025_yf.csv
+
+# ログファイル
+data/download_errors.log
+data/download_log.txt
+data/auto_run_log.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# GitHubにアップロードするもの（除外しない）
+# stock_chart_development.html
+# data/merged/prices_2026.csv         (43.5MB)
+# data/merged/prices_weekly_2026.csv  ( 8.6MB)
+# data/stock_list.csv
+# data/all-japan-stock-financial-results.csv
+# Pythonスクリプト各種
+# バッチ・PowerShellスクリプト
+# .gitignore
