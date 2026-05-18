@@ -1,6 +1,10 @@
 """
 download_prices.py
 KABU+ csvex から日次株価CSV を自動ダウンロードする
+
+使い方:
+  python download_prices.py        -> 本日分のみ（通常実行）
+  python download_prices.py --all  -> 全期間チェック（初回・過去分取得）
 """
 
 import sys
@@ -88,37 +92,40 @@ def download_file(session: requests.Session, url: str, dest: Path,
         return f"error:{e}"
 
 
-def main():
-    print("=" * 50)
-    print("  株価CSV 自動ダウンロード")
-    print("=" * 50)
-
-    # config.txt から認証情報を読み込む
-    username, password = load_config()
-    auth = HTTPBasicAuth(username, password)
-
-    SAVE_DIR.mkdir(parents=True, exist_ok=True)
-
+def run_today(session: requests.Session, auth: HTTPBasicAuth):
+    """本日分（1ファイル）のみダウンロードする"""
     today = date.today()
-    all_dates = [d for d in date_range(START_DATE, today)]
-    total = len(all_dates)
+    filename = build_filename(today)
+    dest = SAVE_DIR / filename
 
-    # 認証テスト
-    print("\n認証を確認中...")
-    session = requests.Session()
-    if not verify_auth(session, auth):
-        print("エラー: 認証に失敗しました。config.txtのID・パスワードを確認してください。")
-        sys.exit(1)
-    print("認証OK\n")
+    print(f"対象: {filename}")
 
-    # 既存ファイルとの差分を計算
+    if dest.exists():
+        print("本日分は取得済みです。")
+        return
+
+    print(f"ダウンロード中 ... ", end="", flush=True)
+    result = download_file(session, BASE_URL + filename, dest, auth)
+
+    if result == "ok":
+        print("完了")
+    elif result == "skip_404":
+        print("スキップ（ファイルなし・休場日の可能性）")
+    else:
+        msg = result.replace("error:", "")
+        print(f"失敗 ({msg})")
+
+
+def run_all(session: requests.Session, auth: HTTPBasicAuth):
+    """全期間（START_DATE〜本日）を差分チェックしてダウンロードする"""
+    today = date.today()
+    all_dates = list(date_range(START_DATE, today))
     existing = {p.name for p in SAVE_DIR.glob("*.csv")}
     targets = [d for d in all_dates if build_filename(d) not in existing]
-    skip_count = total - len(targets)
+    skip_count = len(all_dates) - len(targets)
 
-    print(f"ダウンロード開始")
-    print(f"対象ファイル数　　　 : {total} 件")
-    print(f"ダウンロード済みスキップ : {skip_count} 件")
+    print(f"対象ファイル数       : {len(all_dates)} 件")
+    print(f"取得済みスキップ     : {skip_count} 件")
     print(f"新規ダウンロード対象 : {len(targets)} 件\n")
 
     if not targets:
@@ -131,11 +138,10 @@ def main():
 
     for d in targets:
         filename = build_filename(d)
-        url = BASE_URL + filename
         dest = SAVE_DIR / filename
 
         print(f"  ダウンロード中: {filename} ... ", end="", flush=True)
-        result = download_file(session, url, dest, auth)
+        result = download_file(session, BASE_URL + filename, dest, auth)
 
         if result == "ok":
             print("完了")
@@ -156,6 +162,31 @@ def main():
         print(f"\n失敗ファイル ({len(fail_log)} 件):")
         for fname, reason in fail_log:
             print(f"  {fname}: {reason}")
+
+
+def main():
+    all_mode = "--all" in sys.argv
+
+    print("=" * 50)
+    print("  株価CSV 自動ダウンロード", "（全期間モード）" if all_mode else "（本日分）")
+    print("=" * 50)
+
+    username, password = load_config()
+    auth = HTTPBasicAuth(username, password)
+
+    SAVE_DIR.mkdir(parents=True, exist_ok=True)
+
+    print("\n認証を確認中...")
+    session = requests.Session()
+    if not verify_auth(session, auth):
+        print("エラー: 認証に失敗しました。config.txtのID・パスワードを確認してください。")
+        sys.exit(1)
+    print("認証OK\n")
+
+    if all_mode:
+        run_all(session, auth)
+    else:
+        run_today(session, auth)
 
 
 if __name__ == "__main__":

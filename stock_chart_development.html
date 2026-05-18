@@ -91,9 +91,11 @@ th{text-align:left;padding:7px 10px;color:var(--dm);font-weight:500;border-botto
 td{padding:7px 10px;color:var(--mu);border-bottom:1px solid rgba(48,54,61,.4);font-variant-numeric:tabular-nums;white-space:nowrap;}
 tr:last-child td{border-bottom:none;}
 td.pos{color:var(--bull);}td.neg{color:var(--bear);}td.hi{color:var(--tx);font-weight:500;}
-th.th-latest{color:var(--tx);}td.latest{color:var(--tx);}
+th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:var(--tx);background:rgba(212,168,83,.04);}
 #fin-table td:not(.hi){text-align:right;}
 #fin-table th:not(:first-child){text-align:right;}
+#fin-table td.hi,#fin-table th:first-child{position:sticky;left:0;z-index:1;background:var(--bg2);}
+#fin-table tr:hover td.hi{background:var(--bg3);}
 
 .toast{position:fixed;bottom:16px;right:16px;padding:8px 14px;background:var(--bg3);border:1px solid var(--bd);border-radius:5px;font-size:11px;z-index:100;opacity:0;transform:translateY(16px);transition:.3s;pointer-events:none;}
 .toast.show{opacity:1;transform:none;}
@@ -162,13 +164,83 @@ th.th-latest{color:var(--tx);}td.latest{color:var(--tx);}
 .tf-btn:disabled{opacity:.28;cursor:not-allowed;}
 .tf-sep{width:1px;height:14px;background:var(--bd);margin:0 4px;flex-shrink:0;}
 
+/* ── HAMBURGER ── */
+.hamburger{
+  display:none;flex-direction:column;justify-content:space-between;
+  width:22px;height:16px;background:none;border:none;cursor:pointer;
+  flex-shrink:0;padding:0;
+}
+.hamburger span{display:block;height:2px;background:var(--tx);border-radius:1px;transition:.2s;}
+.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg);}
+.hamburger.open span:nth-child(2){opacity:0;}
+.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg);}
+
+/* ── DRAWER ── */
+.drawer{
+  position:fixed;top:0;left:0;bottom:0;width:260px;
+  background:var(--bg2);border-right:1px solid var(--bd);
+  z-index:300;transform:translateX(-100%);transition:transform .25s ease;
+  display:flex;flex-direction:column;
+}
+.drawer.open{transform:translateX(0);}
+.drawer-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:299;
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.drawer-overlay.open{opacity:1;pointer-events:auto;}
+.drawer-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-bottom:1px solid var(--bd);
+}
+.drawer-title{font-size:11px;font-weight:600;color:var(--gd);letter-spacing:2px;}
+.drawer-close{
+  background:none;border:none;color:var(--mu);font-size:16px;
+  cursor:pointer;padding:2px 6px;border-radius:3px;line-height:1;
+}
+.drawer-body{padding:12px;display:flex;flex-direction:column;gap:8px;}
+.drawer-item{width:100%;justify-content:flex-start;padding:10px 14px;font-size:12px;}
+.drawer-ubtn{position:relative;width:100%;}
+.drawer-ubtn input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+
+/* ── FLEX BREAK (mobile 2-row header) ── */
+.h-break{display:none;}
+
+/* ── PRICE STRIP (mobile only) ── */
+#price-strip{
+  display:none;align-items:center;gap:8px;
+  padding:5px 12px;background:var(--bg3);border-bottom:1px solid var(--bd);flex-shrink:0;
+}
+#strip-price{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;}
+#strip-price.up{color:var(--bull);}#strip-price.down{color:var(--bear);}
+#strip-chg{font-size:11px;font-variant-numeric:tabular-nums;}
+#strip-chg.up{color:var(--bull);}#strip-chg.down{color:var(--bear);}
+
+/* ── NAV BUTTONS (mobile only) ── */
+.nav-btn-wrap{display:none;gap:4px;margin-left:auto;}
+.nav-btn{
+  padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;
+  border:1px solid var(--bd);background:transparent;color:var(--dm);cursor:pointer;transition:.15s;
+}
+.nav-btn:hover{border-color:var(--mu);color:var(--mu);}
+
+/* ── MOBILE BREAKPOINT ── */
 @media(max-width:600px){
-  header{height:42px;padding:0 10px;gap:6px;}
+  header{height:auto;flex-wrap:wrap;padding:0;gap:0;align-items:stretch;}
+  .hamburger{display:flex;align-self:center;margin:0 4px 0 10px;}
   .logo{display:none;}
-  #sprice{font-size:16px;}#schg{font-size:10px;}
-  #sname{max-width:90px;font-size:11px;}
+  #sc-input{margin:8px 0;flex-shrink:0;width:88px;}
+  #sc-btn{margin:8px 0 8px 4px;flex-shrink:0;}
+  .h-break{display:block;flex-basis:100%;height:1px;background:var(--bd);}
+  #sname{padding:5px 10px;max-width:none;font-size:12px;flex:1;}
+  #sprice{display:none!important;}
+  #schg{display:none!important;}
+  .hspacer{display:none!important;}
+  #ulabel-price{display:none!important;}
+  .ubtn{display:none!important;}
+  #price-strip{display:flex;}
+  .nav-btn-wrap{display:flex;}
+  .chart-section{height:calc(100svh - 74px);}
   .ulabel{padding:3px 8px;font-size:10px;}
-  .chart-section{height:calc(100svh - 42px);}
   #xh-tooltip{width:132px;padding:5px 8px;}
   #xh-tooltip .xh-lbl{font-size:8px;}#xh-tooltip .xh-val{font-size:9px;}
   .section{padding:24px 14px;}
@@ -178,13 +250,17 @@ th.th-latest{color:var(--tx);}td.latest{color:var(--tx);}
 <body>
 
 <header>
+  <button class="hamburger" id="hamburger" aria-label="メニュー">
+    <span></span><span></span><span></span>
+  </button>
   <div class="logo">CHART</div>
   <input type="text" id="sc-input" placeholder="コード (例: 8306)" maxlength="6">
   <button id="sc-btn">表示</button>
+  <div class="h-break"></div>
   <div id="sname"></div>
   <div id="sprice"></div>
   <div id="schg"></div>
-  <div style="flex:1;min-width:4px;"></div>
+  <div class="hspacer" style="flex:1;min-width:4px;"></div>
   <button class="ulabel" id="ulabel-price">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     株価データ更新
@@ -198,9 +274,34 @@ th.th-latest{color:var(--tx);}td.latest{color:var(--tx);}
   </div>
 </header>
 
+<div id="drawer-overlay" class="drawer-overlay"></div>
+<div id="drawer" class="drawer">
+  <div class="drawer-header">
+    <span class="drawer-title">MENU</span>
+    <button class="drawer-close" id="drawer-close">✕</button>
+  </div>
+  <div class="drawer-body">
+    <button class="ulabel drawer-item" id="drawer-price-btn">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      株価データ更新
+    </button>
+    <div class="drawer-ubtn">
+      <label class="ulabel drawer-item" id="drawer-fin-label">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        財務データ更新
+      </label>
+      <input type="file" id="fi-fin-drawer" accept=".csv">
+    </div>
+  </div>
+</div>
+
 <div class="page-body">
 
   <div class="chart-section">
+    <div id="price-strip">
+      <span id="strip-price">—</span>
+      <span id="strip-chg"></span>
+    </div>
     <div class="tf-bar">
       <button class="tf-btn" id="tf-btn-d" disabled>日足</button>
       <button class="tf-btn" id="tf-btn-w" disabled>週足</button>
@@ -211,6 +312,10 @@ th.th-latest{color:var(--tx);}td.latest{color:var(--tx);}
       <button class="tf-btn active" id="ind-vol">出来高</button>
       <button class="tf-btn active" id="ind-macd">MACD</button>
       <button class="tf-btn" id="ind-rsi">RSI</button>
+      <div class="nav-btn-wrap">
+        <button class="nav-btn" id="nav-prev">◀◀</button>
+        <button class="nav-btn" id="nav-next">▶▶</button>
+      </div>
     </div>
     <div class="cwrap" id="cwrap">
 
@@ -462,6 +567,14 @@ const PAD={
   macd:{l:8,r:68,t:18,b:18},
   rsi: {l:8,r:68,t:14,b:14},
 };
+function isMob(){return window.innerWidth<=600;}
+function syncPAD(){
+  const m=isMob();
+  PAD.main.l=m?4:8; PAD.main.r=m?4:68;
+  PAD.vol.l =m?4:8; PAD.vol.r =m?4:68;
+  PAD.macd.l=m?4:8; PAD.macd.r=m?4:68;
+  PAD.rsi.l =m?4:8; PAD.rsi.r =m?4:68;
+}
 
 /* ═══════════════════════════════════════════
    CANVAS SETUP
@@ -510,8 +623,9 @@ function drawMain(){
   for(let i=0;i<=5;i++){
     const y=p.t+ph*i/5;
     ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();
+    const lx=isMob()?w-p.r-2:w-p.r+65;
     ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
-    ctx.fillText(fmt(hi-(hi-lo)*i/5),w-p.r+65,y+3.5);
+    ctx.fillText(fmt(hi-(hi-lo)*i/5),lx,y+3.5);
   }
 
   // Bollinger Bands
@@ -561,9 +675,15 @@ function drawMain(){
     ctx.beginPath();ctx.moveTo(p.l,XH.sy);ctx.lineTo(w-p.r,XH.sy);ctx.stroke();
     ctx.setLineDash([]);
     const price=lo+(hi-lo)*(1-(XH.sy-p.t)/ph);
-    ctx.fillStyle='#d4a853';ctx.fillRect(w-p.r+1,XH.sy-8,65,16);
-    ctx.fillStyle='#0d1117';ctx.font='bold 10px monospace';ctx.textAlign='center';
-    ctx.fillText(fmt(price),w-p.r+1+32.5,XH.sy+3.5);
+    if(isMob()){
+      ctx.fillStyle='rgba(22,27,34,.88)';ctx.fillRect(w-p.r-68,XH.sy-8,66,16);
+      ctx.fillStyle='#d4a853';ctx.font='bold 10px monospace';ctx.textAlign='center';
+      ctx.fillText(fmt(price),w-p.r-35,XH.sy+3.5);
+    }else{
+      ctx.fillStyle='#d4a853';ctx.fillRect(w-p.r+1,XH.sy-8,65,16);
+      ctx.fillStyle='#0d1117';ctx.font='bold 10px monospace';ctx.textAlign='center';
+      ctx.fillText(fmt(price),w-p.r+1+32.5,XH.sy+3.5);
+    }
     const d2=DATA[XH.idx];
     if(d2){
       const dLabel=d2.date,dW=ctx.measureText(dLabel).width+14;
@@ -590,7 +710,7 @@ function drawVol(){
   ctx.strokeStyle='#21262d';ctx.lineWidth=0.5;
   ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(w-p.r,p.t);ctx.stroke();
   ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
-  ctx.fillText(fvol(maxV),w-p.r+65,p.t+9);
+  ctx.fillText(fvol(maxV),isMob()?w-p.r-2:w-p.r+65,p.t+9);
   for(let i=s;i<e;i++){
     const d=DATA[i],bull=d.close>=d.open;
     ctx.fillStyle=bull?'rgba(239,83,80,.55)':'rgba(38,166,154,.55)';
@@ -607,9 +727,15 @@ function drawVol(){
     const dv=DATA[XH.idx];
     if(dv&&maxV){
       const vy=h-p.b-(dv.vol/maxV)*ph;
-      ctx.fillStyle='#30363d';ctx.fillRect(w-p.r+1,vy-7,65,14);
-      ctx.fillStyle='#e6edf3';ctx.font='9px monospace';ctx.textAlign='center';
-      ctx.fillText(fvol(dv.vol),w-p.r+1+32.5,vy+3.5);
+      if(isMob()){
+        ctx.fillStyle='rgba(22,27,34,.88)';ctx.fillRect(w-p.r-68,vy-7,66,14);
+        ctx.fillStyle='#e6edf3';ctx.font='9px monospace';ctx.textAlign='center';
+        ctx.fillText(fvol(dv.vol),w-p.r-35,vy+3.5);
+      }else{
+        ctx.fillStyle='#30363d';ctx.fillRect(w-p.r+1,vy-7,65,14);
+        ctx.fillStyle='#e6edf3';ctx.font='9px monospace';ctx.textAlign='center';
+        ctx.fillText(fvol(dv.vol),w-p.r+1+32.5,vy+3.5);
+      }
     }
   }
 }
@@ -642,10 +768,11 @@ function drawMacd(){
     for(let i=s;i<e;i++){const v=arr[i];if(v==null)continue;const x=cx(i,s,p.l),y=ys(v);if(!go){ctx.moveTo(x,y);go=true;}else ctx.lineTo(x,y);}
     ctx.stroke();
   });
+  const mlx=isMob()?w-p.r-2:w-p.r+65;
   ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
-  ctx.fillText(hi.toFixed(2),w-p.r+65,p.t+9);
-  ctx.fillText('0',w-p.r+65,z+4);
-  ctx.fillText(lo.toFixed(2),w-p.r+65,h-p.b+4);
+  ctx.fillText(hi.toFixed(2),mlx,p.t+9);
+  ctx.fillText('0',mlx,z+4);
+  ctx.fillText(lo.toFixed(2),mlx,h-p.b+4);
   if(XH.on&&XH.idx>=0){
     const xBar=cx(XH.idx,s,p.l);
     ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
@@ -656,9 +783,15 @@ function drawMacd(){
     const mv=MD.ml[XH.idx];
     if(mv!=null){
       const my=ys(mv);
-      ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r+1,my-7,65,14);
-      ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
-      ctx.fillText(mv.toFixed(2),w-p.r+1+32.5,my+3.5);
+      if(isMob()){
+        ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r-68,my-7,66,14);
+        ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+        ctx.fillText(mv.toFixed(2),w-p.r-35,my+3.5);
+      }else{
+        ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r+1,my-7,65,14);
+        ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+        ctx.fillText(mv.toFixed(2),w-p.r+1+32.5,my+3.5);
+      }
     }
   }
 }
@@ -694,10 +827,11 @@ function drawRsi(){
   }
   ctx.stroke();
 
+  const rlx=isMob()?w-p.r-2:w-p.r+65;
   ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
-  ctx.fillText('70',w-p.r+65,y70+3.5);
-  ctx.fillText('50',w-p.r+65,y50+3.5);
-  ctx.fillText('30',w-p.r+65,y30+3.5);
+  ctx.fillText('70',rlx,y70+3.5);
+  ctx.fillText('50',rlx,y50+3.5);
+  ctx.fillText('30',rlx,y30+3.5);
 
   if(XH.on&&XH.idx>=0){
     const xBar=cx(XH.idx,s,p.l);
@@ -709,9 +843,15 @@ function drawRsi(){
     const rv=RSI_DATA[XH.idx];
     if(rv!=null){
       const ry=ys(rv);
-      ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r+1,ry-7,65,14);
-      ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
-      ctx.fillText(rv.toFixed(1),w-p.r+1+32.5,ry+3.5);
+      if(isMob()){
+        ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r-68,ry-7,66,14);
+        ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+        ctx.fillText(rv.toFixed(1),w-p.r-35,ry+3.5);
+      }else{
+        ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r+1,ry-7,65,14);
+        ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+        ctx.fillText(rv.toFixed(1),w-p.r+1+32.5,ry+3.5);
+      }
     }
   }
 }
@@ -773,13 +913,19 @@ function drawSig(){
 /* ═══════════════════════════════════════════
    DRAW ALL
 ═══════════════════════════════════════════ */
+let _rafId=null;
 function drawAll(){
-  drawMain();
-  if(IND.vol)  drawVol();
-  if(IND.macd) drawMacd();
-  if(IND.rsi)  drawRsi();
-  drawSig();
-  updateSB();
+  if(_rafId)cancelAnimationFrame(_rafId);
+  _rafId=requestAnimationFrame(()=>{
+    _rafId=null;
+    syncPAD();
+    drawMain();
+    if(IND.vol)  drawVol();
+    if(IND.macd) drawMacd();
+    if(IND.rsi)  drawRsi();
+    drawSig();
+    updateSB();
+  });
 }
 
 /* ═══════════════════════════════════════════
@@ -800,11 +946,15 @@ function updIBLast(){
   if(!DATA.length) return;
   const d=DATA[DATA.length-1],prev=DATA[DATA.length-2];
   $('sprice').textContent=fmt(d.close);
+  $('strip-price').textContent=fmt(d.close);
   if(prev){
     const ch=d.close-prev.close,pct=ch/prev.close*100,sg=ch>=0?'+':'';
-    $('sprice').className='stock-price '+(ch>=0?'up':'down');
-    $('schg').textContent=`${sg}${fmt(ch)} (${sg}${pct.toFixed(2)}%)`;
-    $('schg').className='stock-chg '+(ch>=0?'up':'down');
+    const chStr=`${sg}${fmt(ch)} (${sg}${pct.toFixed(2)}%)`;
+    const cls=ch>=0?'up':'down';
+    $('sprice').className='stock-price '+cls;
+    $('schg').textContent=chStr; $('schg').className='stock-chg '+cls;
+    $('strip-price').className=cls;
+    $('strip-chg').textContent=chStr; $('strip-chg').className=cls;
   }
 }
 
@@ -911,7 +1061,7 @@ ALL_PANES.forEach(id=>{
       const dx=Math.abs(e.touches[0].clientX-t1.x),dy=Math.abs(e.touches[0].clientY-t1.y);
       if(!t1.moved&&(dx>5||dy>5))t1.moved=true;
       if(t1.xhMode){showTouchXH(e.touches[0],id);}
-      else{if(t1.moved&&t1.timer){clearTimeout(t1.timer);t1.timer=null;}V.offset=clamp(tO-(e.touches[0].clientX-t1.x)/bw());drawAll();}
+      else{if(t1.moved&&t1.timer){clearTimeout(t1.timer);t1.timer=null;}V.offset=clamp(tO-(e.touches[0].clientX-t1.x)*(isMob()?3:1)/bw());drawAll();}
     } else if(e.touches.length===2){
       const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
       V.barW=Math.max(3,Math.min(30,Math.round(tBW*(d/tD))));V.gap=Math.max(1,Math.round(V.barW*.2));drawAll();
@@ -1459,7 +1609,39 @@ $('sc-input').addEventListener('keydown',e=>{
   if(e.key==='Enter'){const sc=$('sc-input').value.trim();if(sc)loadChartBySC(sc);}
 });
 
+/* ═══════════════════════════════════════════
+   HAMBURGER / DRAWER
+═══════════════════════════════════════════ */
+function openDrawer(){
+  $('drawer').classList.add('open');
+  $('drawer-overlay').classList.add('open');
+  $('hamburger').classList.add('open');
+}
+function closeDrawer(){
+  $('drawer').classList.remove('open');
+  $('drawer-overlay').classList.remove('open');
+  $('hamburger').classList.remove('open');
+}
+$('hamburger').addEventListener('click',openDrawer);
+$('drawer-close').addEventListener('click',closeDrawer);
+$('drawer-overlay').addEventListener('click',closeDrawer);
+$('drawer-price-btn').addEventListener('click',()=>{closeDrawer();openUploadModal();});
+$('fi-fin-drawer').addEventListener('change',e=>{handleFinFile(e.target.files[0]);closeDrawer();});
+
+/* ═══════════════════════════════════════════
+   NAV BUTTONS
+═══════════════════════════════════════════ */
+$('nav-prev').addEventListener('click',()=>{
+  const step=Math.max(1,Math.floor(visCnt($('pane-main').clientWidth||300,PAD.main)*0.5));
+  V.offset=clamp(V.offset-step); drawAll();
+});
+$('nav-next').addEventListener('click',()=>{
+  const step=Math.max(1,Math.floor(visCnt($('pane-main').clientWidth||300,PAD.main)*0.5));
+  V.offset=clamp(V.offset+step); drawAll();
+});
+
 checkIdbStatus();
+syncPAD();
 </script>
 </body>
 </html>

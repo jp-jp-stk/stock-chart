@@ -2,6 +2,12 @@
 # StockChart Task Scheduler registration script
 # Run with Administrator PowerShell
 
+# -- Principal: SYSTEM account (runs regardless of login state) --
+$principal = New-ScheduledTaskPrincipal `
+    -UserId "SYSTEM" `
+    -LogonType ServiceAccount `
+    -RunLevel Highest
+
 # -- Task 1: StockChart_Daily (Mon-Fri 17:15) --
 $action1 = New-ScheduledTaskAction `
     -Execute "C:\Users\jnpei\Documents\stock-chart\run_daily.bat"
@@ -12,10 +18,10 @@ $trigger1 = New-ScheduledTaskTrigger `
     -At "17:15"
 
 Register-ScheduledTask `
-    -TaskName "StockChart_Daily" `
-    -Action $action1 `
-    -Trigger $trigger1 `
-    -RunLevel Highest `
+    -TaskName  "StockChart_Daily" `
+    -Action    $action1 `
+    -Trigger   $trigger1 `
+    -Principal $principal `
     -Force
 
 Write-Host "[OK] StockChart_Daily registered (Mon-Fri 17:15)"
@@ -30,10 +36,10 @@ $trigger2 = New-ScheduledTaskTrigger `
     -At "17:30"
 
 Register-ScheduledTask `
-    -TaskName "StockChart_Weekly" `
-    -Action $action2 `
-    -Trigger $trigger2 `
-    -RunLevel Highest `
+    -TaskName  "StockChart_Weekly" `
+    -Action    $action2 `
+    -Trigger   $trigger2 `
+    -Principal $principal `
     -Force
 
 Write-Host "[OK] StockChart_Weekly registered (Every Friday 17:30)"
@@ -41,4 +47,9 @@ Write-Host "[OK] StockChart_Weekly registered (Every Friday 17:30)"
 # -- Confirm registered tasks --
 Write-Host ""
 Write-Host "-- Registered tasks --"
-Get-ScheduledTask | Where-Object { $_.TaskName -like "StockChart*" } | Select-Object TaskName, State
+Get-ScheduledTask | Where-Object { $_.TaskName -like "StockChart*" } | `
+    Select-Object TaskName, State | Format-Table -AutoSize
+
+Write-Host "-- Logon type check --"
+Get-ScheduledTask -TaskName "StockChart_Daily"  | Select-Object -ExpandProperty Principal | Select-Object UserId, LogonType
+Get-ScheduledTask -TaskName "StockChart_Weekly" | Select-Object -ExpandProperty Principal | Select-Object UserId, LogonType
