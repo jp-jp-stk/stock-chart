@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>株価チャート</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#d4a853">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="株チャート">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
 :root{
   --bg:#0d1117;--bg2:#161b22;--bg3:#1c2128;--bd:#30363d;
@@ -272,6 +279,14 @@ th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:va
     </label>
     <input type="file" id="fi-fin" accept=".csv">
   </div>
+  <div class="ubtn">
+    <label class="ulabel" id="earnings-ulabel">📅 決算日CSV</label>
+    <input type="file" id="fi-earnings" accept=".csv">
+  </div>
+  <div class="ubtn">
+    <label class="ulabel" id="master-ulabel">🏢 会社名マスタ</label>
+    <input type="file" id="fi-master" accept=".csv">
+  </div>
 </header>
 
 <div id="drawer-overlay" class="drawer-overlay"></div>
@@ -291,6 +306,14 @@ th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:va
         財務データ更新
       </label>
       <input type="file" id="fi-fin-drawer" accept=".csv">
+    </div>
+    <div class="drawer-ubtn">
+      <label class="ulabel drawer-item" id="drawer-earnings-label">📅 決算日CSV</label>
+      <input type="file" id="fi-earnings-drawer" accept=".csv">
+    </div>
+    <div class="drawer-ubtn">
+      <label class="ulabel drawer-item" id="drawer-master-label">🏢 会社名マスタ</label>
+      <input type="file" id="fi-master-drawer" accept=".csv">
     </div>
   </div>
 </div>
@@ -314,8 +337,10 @@ th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:va
       <button class="tf-btn" id="ind-rsi">RSI</button>
       <div class="tf-sep"></div>
       <button class="tf-btn" id="ovl-hline">水平線</button>
-      <button class="tf-btn" id="ovl-trend">トレンド OFF</button>
+      <button class="tf-btn" id="ovl-trend">トレンド</button>
       <button class="tf-btn" id="ovl-breakout">高値ブレイク</button>
+      <div class="tf-sep"></div>
+      <button class="tf-btn" id="ovl-earnings" disabled>決算日</button>
       <div class="nav-btn-wrap">
         <button class="nav-btn" id="nav-prev">◀◀</button>
         <button class="nav-btn" id="nav-next">▶▶</button>
@@ -355,6 +380,10 @@ th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:va
         <div class="xh-sep" id="xh-sep-div" style="display:none"></div>
         <div id="xh-rows-div" style="display:none">
           <div class="xh-row"><span class="xh-lbl">DIV</span><span class="xh-val" id="xh-div">—</span></div>
+        </div>
+        <div class="xh-sep" id="xh-sep-earnings" style="display:none"></div>
+        <div id="xh-rows-earnings" style="display:none">
+          <div class="xh-row"><span class="xh-lbl">決算</span><span class="xh-val" id="xh-earnings">—</span></div>
         </div>
       </div>
 
@@ -562,45 +591,66 @@ function calcDivergence(){
   DIV_DATA=[];
   const n=DATA.length;
   if(n<20||!MD.hist.length)return;
-  const WING=3,MIN_GAP=15,MAX_GAP=50;
+  const WING=5,MIN_GAP=15,MAX_GAP=50;
 
+  // ヒスト標準偏差（ゼロクロス品質判定用）
+  const histVals=MD.hist.filter(v=>v!=null);
+  const histMean=histVals.reduce((a,b)=>a+b,0)/histVals.length;
+  const histStd=Math.sqrt(histVals.reduce((a,b)=>a+(b-histMean)**2,0)/histVals.length);
+
+  // 局所高値・安値をヒストグラム基準で検出
   const lows=[],highs=[];
   for(let i=WING;i<n-WING;i++){
     if(MD.hist[i]==null)continue;
     let isLow=true,isHigh=true;
     for(let k=1;k<=WING;k++){
-      if(DATA[i-k].low <=DATA[i].low ||DATA[i+k].low <=DATA[i].low )isLow =false;
-      if(DATA[i-k].high>=DATA[i].high||DATA[i+k].high>=DATA[i].high)isHigh=false;
+      if(MD.hist[i-k]==null||MD.hist[i+k]==null){isLow=false;isHigh=false;break;}
+      if(MD.hist[i-k]<=MD.hist[i]||MD.hist[i+k]<=MD.hist[i])isLow =false;
+      if(MD.hist[i-k]>=MD.hist[i]||MD.hist[i+k]>=MD.hist[i])isHigh=false;
     }
-    if(isLow) lows.push(i);
-    if(isHigh)highs.push(i);
+    if(isLow  &&MD.hist[i]<0)lows.push(i);   // 0未満の局所安値
+    if(isHigh &&MD.hist[i]>0)highs.push(i);  // 0超の局所高値
   }
 
-  // Bullish: price lower low + hist higher low + both hist<0 + zero cross between
+  // Bullish：株価安値切り下げ + ヒスト安値切り上げ
   for(let j=1;j<lows.length;j++){
     const i1=lows[j-1],i2=lows[j];
     if(i2-i1<MIN_GAP||i2-i1>MAX_GAP)continue;
-    if(DATA[i2].low>=DATA[i1].low)continue;
     const h1=MD.hist[i1],h2=MD.hist[i2];
-    if(h1==null||h2==null||h1>=0||h2>=0)continue;
-    if(h2<=h1)continue;
-    let cross=false;
-    for(let k=i1+1;k<i2;k++){if(MD.hist[k]!=null&&MD.hist[k]>0){cross=true;break;}}
-    if(!cross)continue;
+    if(h1==null||h2==null)continue;
+    // 両ピークが有意な深さであること（ゼロかすりに近い値を除外）
+    if(Math.abs(h1)<histStd*0.5||Math.abs(h2)<histStd*0.5)continue;
+    if(h2<=h1)continue;  // ヒスト切り上げ確認
+    // 株価は±WING内の最小値で比較
+    const p1=Math.min(...DATA.slice(Math.max(0,i1-WING),i1+WING+1).map(d=>d.low));
+    const p2=Math.min(...DATA.slice(Math.max(0,i2-WING),i2+WING+1).map(d=>d.low));
+    if(p2>=p1)continue;  // 株価切り下げ確認
+    // ゼロクロス：3本以上 かつ 十分な高さ
+    const crossVals=[];
+    for(let k=i1+1;k<i2;k++){if(MD.hist[k]!=null&&MD.hist[k]>0)crossVals.push(MD.hist[k]);}
+    if(crossVals.length<3)continue;
+    if(Math.max(...crossVals)<histStd*0.5)continue;
     DIV_DATA.push({type:'bull',idx1:i1,idx2:i2});
   }
 
-  // Bearish: price higher high + hist lower high + both hist>0 + zero cross between
+  // Bearish：株価高値切り上げ + ヒスト高値切り下げ
   for(let j=1;j<highs.length;j++){
     const i1=highs[j-1],i2=highs[j];
     if(i2-i1<MIN_GAP||i2-i1>MAX_GAP)continue;
-    if(DATA[i2].high<=DATA[i1].high)continue;
     const h1=MD.hist[i1],h2=MD.hist[i2];
-    if(h1==null||h2==null||h1<=0||h2<=0)continue;
-    if(h2>=h1)continue;
-    let cross=false;
-    for(let k=i1+1;k<i2;k++){if(MD.hist[k]!=null&&MD.hist[k]<0){cross=true;break;}}
-    if(!cross)continue;
+    if(h1==null||h2==null)continue;
+    // 両ピークが有意な高さであること（ゼロかすりに近い値を除外）
+    if(h1<histStd*0.5||h2<histStd*0.5)continue;
+    if(h2>=h1)continue;  // ヒスト切り下げ確認
+    // 株価は±WING内の最大値で比較
+    const p1=Math.max(...DATA.slice(Math.max(0,i1-WING),i1+WING+1).map(d=>d.high));
+    const p2=Math.max(...DATA.slice(Math.max(0,i2-WING),i2+WING+1).map(d=>d.high));
+    if(p2<=p1)continue;  // 株価切り上げ確認
+    // ゼロクロス：3本以上 かつ 十分な高さ
+    const crossVals=[];
+    for(let k=i1+1;k<i2;k++){if(MD.hist[k]!=null&&MD.hist[k]<0)crossVals.push(MD.hist[k]);}
+    if(crossVals.length<3)continue;
+    if(Math.max(...crossVals.map(Math.abs))<histStd*0.5)continue;
     DIV_DATA.push({type:'bear',idx1:i1,idx2:i2});
   }
 }
@@ -616,7 +666,10 @@ let _dbgLastDate=null;
 let DATA_D=[], DATA_W=[], TFRAME='d';
 
 const IND={ma:true, bb:false, vol:true, macd:true, rsi:false};
-const OVL={hlineMode:0, trendMode:0, breakout:false};
+const OVL={hlineMode:0, trend:false, breakout:false};
+let EARNINGS=[];
+let OVL_EARNINGS=false;
+let COMPANY_MASTER=[];
 
 const V={barW:10,gap:2,offset:0};
 const XH={on:false,sx:0,sy:0,idx:-1};
@@ -751,8 +804,9 @@ function drawMain(){
 
   // Overlays
   if(OVL.hlineMode>0)   drawHorizontalLines(ctx,s,e,ys,w,p);
-  if(OVL.trendMode>0)   drawTrendLines(ctx,s,e,ys,w,p);
+  if(OVL.trend)         drawTrendLines(ctx,s,e,ys,w,p);
   if(OVL.breakout)      drawBreakoutSignals(ctx,s,e,ys,w,p);
+  if(OVL_EARNINGS&&EARNINGS.length>0) drawEarningsMarks(ctx,s,e,ys,w,p);
 
   // Crosshair
   if(XH.on&&XH.idx>=0){
@@ -828,7 +882,7 @@ function drawHorizontalLines(ctx,s,e,ys,w,p){
 function drawTrendLines(ctx,s,e,ys,w,p){
   if(e<=s)return;
   const h=ctx.canvas.parentElement.clientHeight;
-  const segLen=15,numSeg=OVL.trendMode;
+  const segLen=15,numSeg=20;           // 15本×20区間 = 直近300本分
   const start=Math.max(s,e-segLen*numSeg);
   const highPts=[],lowPts=[];
 
@@ -899,6 +953,168 @@ function drawBreakoutSignals(ctx,s,e,ys,w,p){
 }
 
 /* ═══════════════════════════════════════════
+   EARNINGS MARKS
+═══════════════════════════════════════════ */
+// 決算日の翌営業日(+1)から10営業日以内(+10)にBreakシグナルが存在するか確認
+function checkNearBreak(earningsIdx,s,e){
+  const period=25;
+  const from=earningsIdx+1;                      // 翌営業日から
+  const to  =Math.min(e-1,earningsIdx+10);       // 10営業日以内まで
+  for(let i=Math.max(s+period,from);i<=to;i++){
+    if(i<s+period)continue;
+    let refHigh=-Infinity,sumVol=0;
+    for(let j=i-period;j<i;j++){
+      if(DATA[j].high>refHigh)refHigh=DATA[j].high;
+      sumVol+=DATA[j].vol;
+    }
+    const avgVol=sumVol/period;
+    if(DATA[i].close>refHigh&&DATA[i].vol>avgVol&&DATA[i].close>=DATA[i-1].high)return true;
+  }
+  return false;
+}
+
+function drawEarningsMarks(ctx,s,e,ys,w,p){
+  if(!currentCode)return;
+  const currentSC=currentCode.padStart(4,'0');
+  const earningsList=EARNINGS.filter(r=>r.sc.padStart(4,'0')===currentSC);
+  if(!earningsList.length)return;
+
+  const h=ctx.canvas.parentElement.clientHeight;
+  const ph=h-p.t-p.b;
+  const DAY_MS=86400000;
+  const isWeekly=TFRAME==='w';
+
+  // バーインデックス→決算レコードのマップを事前構築
+  const barRecMap=new Map();
+  if(isWeekly){
+    // 週足：各決算日を最近傍バーに対応付け（±21日以内）
+    for(const rec of earningsList){
+      const eTs=new Date(rec.date.replace(/\//g,'-')).getTime();
+      let bestIdx=-1,bestDiff=Infinity;
+      for(let i=0;i<DATA.length;i++){
+        const bTs=new Date(DATA[i].date.replace(/\//g,'-')).getTime();
+        const diff=Math.abs(bTs-eTs);
+        if(diff<bestDiff){bestDiff=diff;bestIdx=i;}
+      }
+      if(bestIdx>=0&&bestDiff<=21*DAY_MS&&!barRecMap.has(bestIdx)){
+        barRecMap.set(bestIdx,rec);
+      }
+    }
+  }else{
+    // 日足：日付完全一致
+    for(let i=0;i<DATA.length;i++){
+      const rec=earningsList.find(r=>r.date===DATA[i].date);
+      if(rec)barRecMap.set(i,rec);
+    }
+  }
+
+  ctx.save();
+  for(let i=s;i<e;i++){
+    const rec=barRecMap.get(i);
+    if(!rec)continue;
+
+    const x=cx(i,s,p.l);
+    const yL=ys(DATA[i].low);
+
+    // 決算後10営業日以内にBreakシグナルがあるか確認
+    const nearBreak=checkNearBreak(i,s,e);
+    if(nearBreak){
+      // 金色縦ライン（決算後Breakの強調）
+      ctx.strokeStyle='rgba(255,215,0,0.4)';
+      ctx.lineWidth=3;ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(x,p.t);ctx.lineTo(x,p.t+ph);ctx.stroke();
+      // 💰マークを大きく（通常の決算日と区別）
+      ctx.font='14px sans-serif';ctx.textAlign='center';
+      ctx.fillText('💰',x,yL+16);
+    }else{
+      // 通常の決算日マーク（透明度を下げて区別）
+      ctx.font='11px sans-serif';ctx.textAlign='center';
+      ctx.globalAlpha=0.6;
+      ctx.fillText('💰',x,yL+16);
+      ctx.globalAlpha=1.0;
+    }
+
+    // 本決算ラベル（Break有無に関わらず表示）
+    if(rec.type==='本決算'){
+      ctx.fillStyle='#f0c040';
+      ctx.font='9px monospace';ctx.textAlign='center';
+      ctx.fillText('本',x,yL+28);
+    }
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+/* ─── EARNINGS: パース・localStorage永続保存 ────────────────────────── */
+
+// 'YYYY/M/D' → 'YYYY/MM/DD' のようにMM/DDをゼロ埋め統一
+function normalizeEarningsDate(d){
+  const parts=d.split('/');
+  if(parts.length!==3)return d;
+  return `${parts[0]}/${parts[1].padStart(2,'0')}/${parts[2].padStart(2,'0')}`;
+}
+
+// テキスト → EARNINGS配列（アップロード時・localStorage復元時共用）
+function parseEarningsCSV(text){
+  const result=[];
+  text.split('\n').slice(1).forEach(line=>{
+    const parts=line.trim().split(',');
+    const sc=parts[0],date=parts[1],type=parts[2];
+    if(!sc||!date)return;
+    result.push({
+      sc:  sc.trim().padStart(4,'0'),
+      date:normalizeEarningsDate(date.trim()),
+      type:type?type.trim():'',
+    });
+  });
+  return result;
+}
+
+// ヘッダーのアップロードボタンラベルを更新（保存日付も表示）
+function updEarningsLabel(){
+  const updated=localStorage.getItem('earnings_updated');
+  if(EARNINGS.length>0&&updated){
+    const d=new Date(updated);
+    $('earnings-ulabel').textContent=`📅 ✓ 決算日 (${d.getMonth()+1}/${d.getDate()})`;
+  }else{
+    $('earnings-ulabel').textContent='📅 決算日CSV';
+  }
+}
+
+// ファイルアップロード時：パース＋localStorageへ保存
+function loadEarningsCSV(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    EARNINGS=parseEarningsCSV(text);
+    try{
+      localStorage.setItem('earnings_csv',text);
+      localStorage.setItem('earnings_updated',new Date().toISOString());
+    }catch(err){
+      console.warn('localStorage保存失敗:',err);
+    }
+    toast(`決算日データ読み込み完了（${EARNINGS.length}件）`,'ok');
+    updEarningsLabel();
+    updOvlBtns();
+    if(OVL_EARNINGS)drawAll();
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+// 起動時：localStorageから自動復元
+function initEarnings(){
+  const saved=localStorage.getItem('earnings_csv');
+  const updated=localStorage.getItem('earnings_updated');
+  if(!saved)return;
+  EARNINGS=parseEarningsCSV(saved);
+  if(!EARNINGS.length)return;
+  console.log(`earnings復元: ${EARNINGS.length}件 (保存日時: ${updated})`);
+  updEarningsLabel();
+  updOvlBtns();
+  // DATA未ロード時はdrawAllしない（チャート表示後に自動反映される）
+}
+
+/* ═══════════════════════════════════════════
    DRAW VOLUME
 ═══════════════════════════════════════════ */
 function drawVol(){
@@ -949,41 +1165,70 @@ function drawMacd(){
   if(!DATA.length) return;
   const p=PAD.macd,{s,e}=slice(w,p); if(s>=e) return;
   const ph=h-p.t-p.b;
-  const vals=[...MD.hist.slice(s,e),...MD.ml.slice(s,e),...MD.sig.slice(s,e)].filter(v=>v!=null);
-  if(!vals.length) return;
-  let lo=Math.min(...vals),hi=Math.max(...vals);
-  const rng=hi-lo||0.01; lo-=rng*0.1; hi+=rng*0.1;
-  const ys=v=>p.t+ph*(1-(v-lo)/(hi-lo)),z=ys(0);
+
+  // 左軸：MACDライン・シグナルライン専用スケール
+  const lineVals=[...MD.ml.slice(s,e),...MD.sig.slice(s,e)].filter(v=>v!=null);
+  if(!lineVals.length) return;
+  let lineLo=Math.min(...lineVals),lineHi=Math.max(...lineVals);
+  const lineRng=lineHi-lineLo||0.01; lineLo-=lineRng*0.1; lineHi+=lineRng*0.1;
+  const ysLine=v=>p.t+ph*(1-(v-lineLo)/(lineHi-lineLo));
+
+  // 右軸：ヒストグラム専用（ゼロライン中心・対称スケール）
+  const histVals=MD.hist.slice(s,e).filter(v=>v!=null);
+  let histLo,histHi;
+  if(histVals.length){
+    const histAbs=Math.max(Math.abs(Math.min(...histVals)),Math.abs(Math.max(...histVals)))*1.15;
+    histLo=-histAbs; histHi=histAbs;
+  }else{
+    histLo=-0.01; histHi=0.01;
+  }
+  const ysHist=v=>p.t+ph*(1-(v-histLo)/(histHi-histLo));
+  const z=ysHist(0);  // ゼロライン位置はヒスト軸基準
+
+  // ゼロライン・グリッド
   ctx.strokeStyle='#21262d';ctx.lineWidth=0.5;
   ctx.beginPath();ctx.moveTo(p.l,z);ctx.lineTo(w-p.r,z);ctx.stroke();
   ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(w-p.r,p.t);ctx.stroke();
+
+  // ヒストグラム（ysHist 基準）
   for(let i=s;i<e;i++){
     const v=MD.hist[i]; if(v==null)continue;
     ctx.fillStyle=v>=0?'rgba(239,83,80,.72)':'rgba(38,166,154,.72)';
-    const x=cx(i,s,p.l),y=ys(v);
+    const x=cx(i,s,p.l),y=ysHist(v);
     if(v>=0)ctx.fillRect(x-V.barW/2,y,V.barW,z-y);else ctx.fillRect(x-V.barW/2,z,V.barW,y-z);
   }
+
+  // MACDライン・シグナルライン（ysLine 基準）
   ctx.lineWidth=1;
   [[MD.ml,'#2196f3'],[MD.sig,'#ff9800']].forEach(([arr,col])=>{
     ctx.strokeStyle=col;ctx.beginPath();let go=false;
-    for(let i=s;i<e;i++){const v=arr[i];if(v==null)continue;const x=cx(i,s,p.l),y=ys(v);if(!go){ctx.moveTo(x,y);go=true;}else ctx.lineTo(x,y);}
+    for(let i=s;i<e;i++){const v=arr[i];if(v==null)continue;const x=cx(i,s,p.l),y=ysLine(v);if(!go){ctx.moveTo(x,y);go=true;}else ctx.lineTo(x,y);}
     ctx.stroke();
   });
-  const mlx=isMob()?w-p.r-2:w-p.r+65;
-  ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
-  ctx.fillText(hi.toFixed(2),mlx,p.t+9);
-  ctx.fillText('0',mlx,z+4);
-  ctx.fillText(lo.toFixed(2),mlx,h-p.b+4);
 
-  // Divergence connecting lines
+  // 軸ラベル
+  const mlx=isMob()?w-p.r-2:w-p.r+65;
+  // 左軸：MACDライン用（青色・左端）※デスクトップのみ
+  if(!isMob()){
+    ctx.fillStyle='#2196f3';ctx.font='9px monospace';ctx.textAlign='left';
+    ctx.fillText(lineHi.toFixed(2),p.l+2,p.t+9);
+    ctx.fillText(lineLo.toFixed(2),p.l+2,h-p.b+4);
+  }
+  // 右軸：ヒスト用（既存位置）
+  ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
+  ctx.fillText(histHi.toFixed(2),mlx,p.t+9);
+  ctx.fillText('0',mlx,z+4);
+  ctx.fillText(histLo.toFixed(2),mlx,h-p.b+4);
+
+  // ダイバージェンス破線（ysHist 基準：ヒスト頂点を結ぶ）
   if(DIV_DATA.length){
     for(const dv of DIV_DATA){
       const {type,idx1,idx2}=dv;
       if(idx2<s||idx1>=e)continue;
       const h1=MD.hist[idx1],h2=MD.hist[idx2];
       if(h1==null||h2==null)continue;
-      const x1=cx(idx1,s,p.l),y1=ys(h1);
-      const x2=cx(idx2,s,p.l),y2=ys(h2);
+      const x1=cx(idx1,s,p.l),y1=ysHist(h1);
+      const x2=cx(idx2,s,p.l),y2=ysHist(h2);
       ctx.strokeStyle=type==='bull'?'rgba(239,83,80,0.9)':'rgba(38,166,154,0.9)';
       ctx.lineWidth=0.9;ctx.setLineDash([2,3]);
       ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
@@ -991,6 +1236,7 @@ function drawMacd(){
     }
   }
 
+  // クロスヘア（MACDライン値バッジは ysLine 基準）
   if(XH.on&&XH.idx>=0){
     const xBar=cx(XH.idx,s,p.l);
     ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
@@ -1000,7 +1246,7 @@ function drawMacd(){
     ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
     const mv=MD.ml[XH.idx];
     if(mv!=null){
-      const my=ys(mv);
+      const my=ysLine(mv);
       if(isMob()){
         ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r-68,my-7,66,14);
         ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
@@ -1250,6 +1496,29 @@ function updTooltip(i){
     de.className='xh-val '+(divSig.type==='bull'?'bull':'bear');
   }
 
+  // Earnings
+  let earningsRec=null;
+  if(OVL_EARNINGS&&EARNINGS.length>0&&currentCode){
+    const eSC=currentCode.padStart(4,'0');
+    if(TFRAME==='d'){
+      earningsRec=EARNINGS.find(r=>r.sc.padStart(4,'0')===eSC&&r.date===d.date)||null;
+    }else{
+      const dTs=new Date(d.date.replace(/\//g,'-')).getTime();
+      earningsRec=EARNINGS.find(r=>{
+        if(r.sc.padStart(4,'0')!==eSC)return false;
+        const eTs=new Date(r.date.replace(/\//g,'-')).getTime();
+        return Math.abs(eTs-dTs)<=21*86400000;
+      })||null;
+    }
+  }
+  $('xh-sep-earnings').style.display=earningsRec?'':'none';
+  $('xh-rows-earnings').style.display=earningsRec?'':'none';
+  if(earningsRec){
+    const ee=$('xh-earnings');
+    ee.textContent=earningsRec.type||'決算';
+    ee.className='xh-val';
+  }
+
   tip.style.display='block';
 }
 
@@ -1369,13 +1638,25 @@ const cycleMode=n=>n===0?2:n===7?0:n+1;
 function updOvlBtns(){
   $('ovl-hline').className   ='tf-btn'+(OVL.hlineMode>0?' active':'');
   $('ovl-hline').textContent =OVL_MODE_LABELS('水平線',OVL.hlineMode);
-  $('ovl-trend').className   ='tf-btn'+(OVL.trendMode>0?' active':'');
-  $('ovl-trend').textContent =OVL_MODE_LABELS('トレンド',OVL.trendMode);
+  $('ovl-trend').className   ='tf-btn'+(OVL.trend?' active':'');
   $('ovl-breakout').className='tf-btn'+(OVL.breakout?' active':'');
+  const eBtnEl=$('ovl-earnings');
+  eBtnEl.disabled  =EARNINGS.length===0;
+  eBtnEl.className ='tf-btn'+(OVL_EARNINGS&&EARNINGS.length>0?' active':'');
 }
 $('ovl-hline').addEventListener('click',()=>{OVL.hlineMode=cycleMode(OVL.hlineMode);updOvlBtns();drawAll();});
-$('ovl-trend').addEventListener('click',()=>{OVL.trendMode=cycleMode(OVL.trendMode);updOvlBtns();drawAll();});
+$('ovl-trend').addEventListener('click',()=>{OVL.trend=!OVL.trend;updOvlBtns();drawAll();});
 $('ovl-breakout').addEventListener('click',()=>{OVL.breakout=!OVL.breakout;updOvlBtns();drawAll();});
+$('ovl-earnings').addEventListener('click',()=>{
+  if(EARNINGS.length===0)return;
+  OVL_EARNINGS=!OVL_EARNINGS;updOvlBtns();drawAll();
+});
+$('fi-earnings').addEventListener('change',e=>{
+  const f=e.target.files[0];if(f)loadEarningsCSV(f);e.target.value='';
+});
+$('fi-earnings-drawer').addEventListener('change',e=>{
+  const f=e.target.files[0];if(f){loadEarningsCSV(f);closeDrawer();}e.target.value='';
+});
 
 /* ═══════════════════════════════════════════
    LOAD DATA
@@ -1628,24 +1909,56 @@ function idbGetMeta(db,label){
 
 /* ═══════════════════════════════════════════
    KABU+ CSV PARSER (per-row records)
+   列インデックスはヘッダー行から動的に取得（列順変更に対応）
 ═══════════════════════════════════════════ */
-// columns: SC(0),名称(1),市場(2),業種(3),日付(4),株価(5),前日比(6),前日比%(7),
-//          前日終値(8),始値(9),高値(10),安値(11),出来高(12),...
 function parseKabuToRecords(text,storeName){
   const prefix=storeName===STORE_DAILY?'d':'w';
   const records=[];
   const lines=text.split('\n');
+  if(!lines.length)return records;
+
+  // ヘッダー行から列インデックスを取得（完全一致→前方一致の順でフォールバック）
+  const header=lines[0].split(',').map(h=>h.trim());
+  const col=name=>{
+    let i=header.indexOf(name);
+    if(i<0)i=header.findIndex(h=>h.startsWith(name));
+    return i;
+  };
+  const idx={
+    sc:    col('SC'),
+    nm:    col('名称'),
+    date:  col('日付'),
+    close: col('株価'),
+    open:  col('始値'),
+    high:  col('高値'),
+    low:   col('安値'),
+    vol:   col('出来高'),
+    // 前日比と前日比%を厳密に区別（完全一致優先）
+    chg:   header.findIndex(h=>h==='前日比'),
+    chgPct:header.findIndex(h=>h==='前日比%'||h==='前日比(%)'),
+  };
+
+  // 必須列チェック
+  if(idx.sc<0||idx.date<0||idx.close<0){
+    console.warn('parseKabuToRecords: 必須列が見つかりません',
+      {SC:idx.sc, 日付:idx.date, 株価:idx.close}, 'ヘッダー:', header.slice(0,15));
+    return records;
+  }
+
   for(let i=1;i<lines.length;i++){
     const line=lines[i].trim(); if(!line)continue;
     const c=line.split(',');
-    if(c.length<13)continue;
-    const sc=c[0].trim(); if(!sc)continue;
-    const nm=c[1].trim();
-    const d=c[4].trim(); if(!d)continue;
-    const cl=parseFloat(c[5]);
+    const sc=c[idx.sc]?.trim(); if(!sc)continue;
+    const nm=idx.nm>=0?c[idx.nm]?.trim()||'':'';
+    const d=c[idx.date]?.trim(); if(!d)continue;
+    const cl=parseFloat(c[idx.close]);
     if(isNaN(cl))continue;
-    const op=parseFloat(c[9]),hi=parseFloat(c[10]),lo=parseFloat(c[11]),vl=parseFloat(c[12]);
-    const chg=parseFloat(c[6]),chgPct=parseFloat(c[7]);
+    const op=idx.open  >=0?parseFloat(c[idx.open])  :NaN;
+    const hi=idx.high  >=0?parseFloat(c[idx.high])  :NaN;
+    const lo=idx.low   >=0?parseFloat(c[idx.low])   :NaN;
+    const vl=idx.vol   >=0?parseFloat(c[idx.vol])   :NaN;
+    const chg   =idx.chg   >=0?parseFloat(c[idx.chg])   :NaN;
+    const chgPct=idx.chgPct>=0?parseFloat(c[idx.chgPct]):NaN;
     records.push({
       key:`${prefix}_${sc}_${d}`,
       sc,nm,d,
@@ -1654,7 +1967,7 @@ function parseKabuToRecords(text,storeName){
       l:isNaN(lo)?cl:lo,
       c:cl,
       v:isNaN(vl)?0:vl,
-      chg:isNaN(chg)?null:chg,
+      chg:   isNaN(chg)   ?null:chg,
       chgPct:isNaN(chgPct)?null:chgPct,
     });
   }
@@ -1831,7 +2144,8 @@ async function loadChartBySC(sc){
     const name=dailyRecs[0]?.nm||weeklyRecs[0]?.nm||sc;
     currentCode=sc;
     DATA_D=daily; DATA_W=weekly;
-    TFRAME='d';
+    // TFRAME を実際に表示するデータに同期（日足がなければ週足モードで開始）
+    TFRAME=daily.length>0?'d':'w';
     XH.on=false;XH.idx=-1;$('xh-tooltip').style.display='none';
     loadData(daily.length?daily:weekly,name);
     updFinDisplay(currentCode);
@@ -1864,6 +2178,123 @@ async function checkIdbStatus(){
 }
 
 /* ═══════════════════════════════════════════
+   COMPANY MASTER
+═══════════════════════════════════════════ */
+function _parseMasterCSV(text){
+  return text.split('\n').slice(1).filter(l=>l.trim()).map(line=>{
+    const [sc,name,nameN]=line.split(',');
+    return{sc:sc?.trim(),name:name?.trim(),nameN:nameN?.trim()||name?.trim()};
+  }).filter(r=>r.sc&&r.name);
+}
+
+function loadCompanyMaster(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    COMPANY_MASTER=_parseMasterCSV(text);
+    try{localStorage.setItem('company_master',text);}catch(err){console.warn('localStorage保存失敗:',err);}
+    toast(`会社名マスタ読み込み完了（${COMPANY_MASTER.length}件）`,'ok');
+    $('master-ulabel').textContent=`🏢 ✓ マスタ(${COMPANY_MASTER.length})`;
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function initCompanyMaster(){
+  const saved=localStorage.getItem('company_master');
+  if(!saved)return;
+  COMPANY_MASTER=_parseMasterCSV(saved);
+  if(!COMPANY_MASTER.length)return;
+  console.log(`company_master復元: ${COMPANY_MASTER.length}件`);
+  $('master-ulabel').textContent=`🏢 ✓ マスタ(${COMPANY_MASTER.length})`;
+}
+
+function searchCompany(q){
+  const qU=q.toUpperCase();
+  const results=COMPANY_MASTER.filter(r=>
+    r.sc.includes(q)||
+    r.name.includes(q)||
+    (r.nameN&&r.nameN.toUpperCase().includes(qU))
+  ).slice(0,10);
+  const container=$('sc-search-results');
+  if(!container)return;
+  if(!results.length){
+    container.innerHTML='<div style="color:#8b949e;font-size:11px;padding:8px 4px;">該当なし</div>';
+    return;
+  }
+  container.innerHTML=results.map(r=>`
+    <div class="sc-result-item" data-sc="${r.sc}"
+      style="display:flex;justify-content:space-between;align-items:center;
+             padding:6px 8px;border-radius:4px;cursor:pointer;
+             border-bottom:1px solid #21262d;">
+      <span style="color:#e6edf3;font-size:12px;">${r.name}</span>
+      <span style="color:#d4a853;font-size:12px;font-family:monospace;">${r.sc}</span>
+    </div>`).join('');
+  container.querySelectorAll('.sc-result-item').forEach(el=>{
+    el.addEventListener('mouseenter',()=>el.style.background='#21262d');
+    el.addEventListener('mouseleave',()=>el.style.background='transparent');
+    el.addEventListener('click',()=>{
+      const sc=el.dataset.sc;
+      $('sc-input').value=sc;
+      document.getElementById('sc-search-popup')?.remove();
+      loadChartBySC(sc);
+    });
+  });
+}
+
+function showSearchPopup(){
+  document.getElementById('sc-search-popup')?.remove();
+  if(!COMPANY_MASTER.length)return;  // マスタ未読み込み時は表示しない
+
+  const popup=document.createElement('div');
+  popup.id='sc-search-popup';
+  popup.style.cssText=`
+    position:fixed;top:50px;left:50%;transform:translateX(-50%);
+    background:#161b22;border:1px solid #30363d;border-radius:8px;
+    padding:12px;width:320px;max-width:92vw;z-index:9999;
+    box-shadow:0 8px 24px rgba(0,0,0,0.5);`;
+  popup.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="color:#8b949e;font-size:11px;font-family:monospace;">銘柄検索</span>
+      <span id="sc-search-close" style="color:#8b949e;cursor:pointer;font-size:14px;padding:0 4px;">✕</span>
+    </div>
+    <input id="sc-search-input" type="text" placeholder="証券コード または 企業名"
+      style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;
+             border-radius:4px;color:#e6edf3;font-size:13px;padding:6px 8px;outline:none;">
+    <div id="sc-search-results" style="margin-top:6px;max-height:220px;overflow-y:auto;"></div>`;
+  document.body.appendChild(popup);
+
+  document.getElementById('sc-search-close').onclick=()=>popup.remove();
+
+  const input=document.getElementById('sc-search-input');
+  input.focus();
+  input.addEventListener('input',()=>{
+    const q=input.value.trim();
+    if(!q){$('sc-search-results').innerHTML='';return;}
+    searchCompany(q);
+  });
+  input.addEventListener('keydown',e=>{
+    if(e.key==='Escape')popup.remove();
+    if(e.key==='Enter'){
+      const first=document.querySelector('.sc-result-item');
+      if(first)first.click();
+    }
+  });
+
+  // 画面外クリックで閉じる（setTimeout で今の focus イベントをスキップ）
+  setTimeout(()=>{
+    function _outsideHandler(e){
+      const p=document.getElementById('sc-search-popup');
+      if(!p){document.removeEventListener('click',_outsideHandler);return;}
+      if(!p.contains(e.target)&&e.target!==$('sc-input')){
+        p.remove();
+        document.removeEventListener('click',_outsideHandler);
+      }
+    }
+    document.addEventListener('click',_outsideHandler);
+  },0);
+}
+
+/* ═══════════════════════════════════════════
    EVENT LISTENERS
 ═══════════════════════════════════════════ */
 $('sc-btn').addEventListener('click',()=>{
@@ -1872,6 +2303,13 @@ $('sc-btn').addEventListener('click',()=>{
 });
 $('sc-input').addEventListener('keydown',e=>{
   if(e.key==='Enter'){const sc=$('sc-input').value.trim();if(sc)loadChartBySC(sc);}
+});
+$('sc-input').addEventListener('focus',showSearchPopup);
+$('fi-master').addEventListener('change',e=>{
+  const f=e.target.files[0];if(f)loadCompanyMaster(f);e.target.value='';
+});
+$('fi-master-drawer').addEventListener('change',e=>{
+  const f=e.target.files[0];if(f){loadCompanyMaster(f);closeDrawer();}e.target.value='';
 });
 
 /* ═══════════════════════════════════════════
@@ -1907,6 +2345,17 @@ $('nav-next').addEventListener('click',()=>{
 
 checkIdbStatus();
 syncPAD();
+initEarnings();
+initCompanyMaster();
+
+// PWA Service Worker 登録
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    console.log('[SW] 登録完了:', reg.scope);
+  }).catch(err=>{
+    console.warn('[SW] 登録失敗:', err);
+  });
+}
 </script>
 </body>
 </html>
