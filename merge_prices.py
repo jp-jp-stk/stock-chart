@@ -181,9 +181,20 @@ def apply_splits(df_sc: pd.DataFrame, splits_df: pd.DataFrame, sc: str) -> pd.Da
 
 
 def save_csv(df: pd.DataFrame, path: Path):
-    """DataFrame を UTF-8 CSV として保存"""
+    """DataFrame を UTF-8 CSV として保存（ファイルロック時は最大3回リトライ）"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path, index=False, encoding="utf-8")
+    for attempt in range(3):
+        try:
+            df.to_csv(path, index=False, encoding="utf-8")
+            return
+        except PermissionError:
+            if attempt < 2:
+                print(f"  ファイルがロックされています。10秒後にリトライ... ({attempt + 1}/3)")
+                time.sleep(10)
+            else:
+                print(f"  エラー: {path.name} への書き込み権限がありません")
+                print(f"  Excel やブラウザでファイルを開いていたら閉じてください")
+                raise
 
 
 def main():

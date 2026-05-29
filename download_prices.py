@@ -89,6 +89,10 @@ def download_file(session: requests.Session, url: str, dest: Path,
         resp.raise_for_status()
         dest.write_bytes(resp.content)
         return "ok"
+    except requests.exceptions.ConnectionError as e:
+        if "getaddrinfo failed" in str(e) or "NameResolutionError" in str(e):
+            return "dns_error"
+        return f"error:{e}"
     except requests.RequestException as e:
         return f"error:{e}"
 
@@ -130,7 +134,13 @@ def _run_download(session: requests.Session, auth: HTTPBasicAuth,
         print(f"  [{i + 1}/{len(targets)}] {filename} ... ", end="", flush=True)
         result = download_file(session, BASE_URL + filename, dest, auth)
 
-        if result == "ok":
+        if result == "dns_error":
+            print("DNS解決失敗")
+            print("\nDNS解決失敗 - ネットワーク接続を確認してください")
+            print("残りのダウンロードをスキップします")
+            fail_log.append((filename, "DNS解決失敗"))
+            break
+        elif result == "ok":
             print("完了")
             done_count += 1
         elif result == "skip_404":
