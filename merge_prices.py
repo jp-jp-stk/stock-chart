@@ -10,8 +10,9 @@ from pathlib import Path
 import pandas as pd
 
 # ── 設定 ──────────────────────────────────────────────────
-DAILY_DIR  = Path(__file__).parent / "data" / "daily"
-MERGED_DIR = Path(__file__).parent / "data" / "merged"
+DAILY_DIR      = Path(__file__).parent / "data" / "daily"
+MERGED_DIR     = Path(__file__).parent / "data" / "merged"
+SETTLEMENT_DIR = Path(__file__).parent / "data" / "settlement"
 
 INPUT_COLS = [
     "SC", "名称", "市場", "業種", "日付", "株価", "前日比",
@@ -113,6 +114,72 @@ def build_weekly(df: pd.DataFrame) -> pd.DataFrame:
     return weekly[cols]
 
 
+def load_splits() -> pd.DataFrame:
+    """splits.csv を読み込む（なければ空 DataFrame）
+
+    異常な ratio（実際の株式分割ではない合併・組織再編等）を除外する。
+    有効範囲: 0.1 ≤ ratio ≤ 20（1:10分割〜10:1併合まで）
+    """
+    path = SETTLEMENT_DIR / "splits.csv"
+    if not path.exists():
+        return pd.DataFrame(columns=["SC", "date", "ratio"])
+    try:
+        df = pd.read_csv(path, encoding="utf-8", dtype={"SC": str})
+        df["SC"]    = df["SC"].str.zfill(4)
+        df["ratio"] = pd.to_numeric(df["ratio"], errors="coerce")
+        before = len(df)
+        df = df[(df["ratio"] >= 0.1) & (df["ratio"] <= 20)].reset_index(drop=True)
+        filtered = before - len(df)
+        print(f"splits.csv 読み込み: {len(df)} 件（異常ratio除外: {filtered} 件）")
+        return df
+    except Exception as e:
+        print(f"[警告] splits.csv 読み込み失敗: {e}")
+        return pd.DataFrame(columns=["SC", "date", "ratio"])
+
+
+def apply_splits(df_sc: pd.DataFrame, splits_df: pd.DataFrame, sc: str) -> pd.DataFrame:
+    """
+    yfinanceの調整済みデータ（分割後価格）に統一する。
+    KABU+の未調整データ（分割前価格）を分割比率で割って補正する。
+
+    splits_df の date 列は 'YYYY/MM/DD' 文字列。
+    df_sc の '日付' 列は datetime 型。
+    KABU+ データ開始日（2025/05/01）以降の分割のみ対象。
+    """
+    sc_splits = splits_df[
+        (splits_df["SC"] == sc) &
+        (splits_df["date"] >= "2025/05/01")
+    ].sort_values("date")
+
+    if sc_splits.empty:
+        return df_sc
+
+    for _, split in sc_splits.iterrows():
+        # YYYY/MM/DD → pd.Timestamp に変換して datetime 列と比較
+        split_ts = pd.Timestamp(split["date"].replace("/", "-"))
+        ratio    = split["ratio"]
+
+        # 補正対象: KABU+ 生データ取得開始日(2025/05/01) 〜 分割日の前日
+        # Jan〜Apr のデータは KABU+ が自動で調整済みのため対象外
+        # May 1〜(分割日-1) のデータのみ未調整なので ÷ratio で補正
+        kabu_raw_start = pd.Timestamp("2025-05-01")
+        mask = (df_sc["日付"] >= kabu_raw_start) & (df_sc["日付"] < split_ts)
+        if mask.sum() == 0:
+            continue
+
+        for col in ["株価", "始値", "高値", "安値", "前日終値"]:
+            if col in df_sc.columns:
+                df_sc.loc[mask, col] = df_sc.loc[mask, col] / ratio
+
+        # 出来高は逆に ratio 倍
+        if "出来高" in df_sc.columns:
+            df_sc.loc[mask, "出来高"] = df_sc.loc[mask, "出来高"] * ratio
+
+        print(f"  補正: SC{sc} {split['date']} ÷{ratio} ({mask.sum()}行)")
+
+    return df_sc
+
+
 def save_csv(df: pd.DataFrame, path: Path):
     """DataFrame を UTF-8 CSV として保存"""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +194,10 @@ def main():
     print("=" * 50)
 
     MERGED_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 分割データ読み込み
+    splits_df  = load_splits()
+    split_scs  = set(splits_df["SC"].unique()) if not splits_df.empty else set()
 
     daily_files = sorted(DAILY_DIR.glob("japan-all-stock-prices_*.csv"))
     print(f"\n読み込みファイル数: {len(daily_files)} 件")
@@ -181,6 +252,20 @@ def main():
         merged = merged.sort_values(["日付", "SC"]).drop_duplicates(
             subset=DEDUP_KEYS, keep="last"
         )
+
+        # ── 分割補正（splits.csv が存在し、分割がある銘柄のみ処理）──
+        affected_scs = split_scs & set(merged["SC"].astype(str).unique())
+        if affected_scs:
+            print(f"\n  分割補正対象: {len(affected_scs)} 銘柄")
+            affected   = merged[merged["SC"].astype(str).isin(affected_scs)].copy()
+            unaffected = merged[~merged["SC"].astype(str).isin(affected_scs)]
+            corrected  = [
+                apply_splits(grp.copy(), splits_df, sc_val)
+                for sc_val, grp in affected.groupby("SC")
+            ]
+            merged = pd.concat(
+                [unaffected] + corrected, ignore_index=True
+            ).sort_values(["日付", "SC"]).reset_index(drop=True)
 
         out = merged.copy()
         out["日付"] = out["日付"].dt.strftime("%Y/%m/%d")
