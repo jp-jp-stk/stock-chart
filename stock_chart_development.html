@@ -818,30 +818,32 @@ function drawMain(){
   // Crosshair
   if(XH.on&&XH.idx>=0){
     const xBar=cx(XH.idx,s,p.l);
-    ctx.strokeStyle='rgba(139,148,158,.5)'; ctx.lineWidth=0.5; ctx.setLineDash([3,3]);
-    ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(p.l,XH.sy);ctx.lineTo(w-p.r,XH.sy);ctx.stroke();
-    ctx.setLineDash([]);
-    const price=lo+(hi-lo)*(1-(XH.sy-p.t)/ph);
-    if(isMob()){
-      ctx.fillStyle='rgba(22,27,34,.88)';ctx.fillRect(w-p.r-68,XH.sy-8,66,16);
-      ctx.fillStyle='#d4a853';ctx.font='bold 10px monospace';ctx.textAlign='center';
-      ctx.fillText(fmt(price),w-p.r-35,XH.sy+3.5);
-    }else{
-      ctx.fillStyle='#d4a853';ctx.fillRect(w-p.r+1,XH.sy-8,65,16);
-      ctx.fillStyle='#0d1117';ctx.font='bold 10px monospace';ctx.textAlign='center';
-      ctx.fillText(fmt(price),w-p.r+1+32.5,XH.sy+3.5);
+    if(xBar>=p.l&&xBar<=w-p.r){
+      ctx.strokeStyle='rgba(139,148,158,.5)'; ctx.lineWidth=0.5; ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(p.l,XH.sy);ctx.lineTo(w-p.r,XH.sy);ctx.stroke();
+      ctx.setLineDash([]);
+      const price=lo+(hi-lo)*(1-(XH.sy-p.t)/ph);
+      if(isMob()){
+        ctx.fillStyle='rgba(22,27,34,.88)';ctx.fillRect(w-p.r-68,XH.sy-8,66,16);
+        ctx.fillStyle='#d4a853';ctx.font='bold 10px monospace';ctx.textAlign='center';
+        ctx.fillText(fmt(price),w-p.r-35,XH.sy+3.5);
+      }else{
+        ctx.fillStyle='#d4a853';ctx.fillRect(w-p.r+1,XH.sy-8,65,16);
+        ctx.fillStyle='#0d1117';ctx.font='bold 10px monospace';ctx.textAlign='center';
+        ctx.fillText(fmt(price),w-p.r+1+32.5,XH.sy+3.5);
+      }
+      const d2=DATA[XH.idx];
+      if(d2){
+        const dLabel=d2.date,dW=ctx.measureText(dLabel).width+14;
+        let dx=xBar-dW/2; dx=Math.max(p.l,Math.min(w-p.r-dW,dx));
+        ctx.fillStyle='#d4a853';ctx.fillRect(dx,h-p.b+2,dW,16);
+        ctx.fillStyle='#0d1117';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+        ctx.fillText(dLabel,dx+dW/2,h-p.b+12);
+      }
+      ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+      ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
     }
-    const d2=DATA[XH.idx];
-    if(d2){
-      const dLabel=d2.date,dW=ctx.measureText(dLabel).width+14;
-      let dx=xBar-dW/2; dx=Math.max(p.l,Math.min(w-p.r-dW,dx));
-      ctx.fillStyle='#d4a853';ctx.fillRect(dx,h-p.b+2,dW,16);
-      ctx.fillStyle='#0d1117';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
-      ctx.fillText(dLabel,dx+dW/2,h-p.b+12);
-    }
-    ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
-    ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
   }
 }
 
@@ -1151,22 +1153,24 @@ function drawVol(){
   ctx.restore();
   if(XH.on&&XH.idx>=0){
     const xBar=cx(XH.idx,s,p.l);
-    ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
-    ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
-    ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
-    const dv=DATA[XH.idx];
-    if(dv&&maxV){
-      const vy=h-p.b-(dv.vol/maxV)*ph;
-      if(isMob()){
-        ctx.fillStyle='rgba(22,27,34,.88)';ctx.fillRect(w-p.r-68,vy-7,66,14);
-        ctx.fillStyle='#e6edf3';ctx.font='9px monospace';ctx.textAlign='center';
-        ctx.fillText(fvol(dv.vol),w-p.r-35,vy+3.5);
-      }else{
-        ctx.fillStyle='#30363d';ctx.fillRect(w-p.r+1,vy-7,65,14);
-        ctx.fillStyle='#e6edf3';ctx.font='9px monospace';ctx.textAlign='center';
-        ctx.fillText(fvol(dv.vol),w-p.r+1+32.5,vy+3.5);
+    if(xBar>=p.l&&xBar<=w-p.r){
+      ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+      ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
+      const dv=DATA[XH.idx];
+      if(dv&&maxV){
+        const vy=h-p.b-(dv.vol/maxV)*ph;
+        if(isMob()){
+          ctx.fillStyle='rgba(22,27,34,.88)';ctx.fillRect(w-p.r-68,vy-7,66,14);
+          ctx.fillStyle='#e6edf3';ctx.font='9px monospace';ctx.textAlign='center';
+          ctx.fillText(fvol(dv.vol),w-p.r-35,vy+3.5);
+        }else{
+          ctx.fillStyle='#30363d';ctx.fillRect(w-p.r+1,vy-7,65,14);
+          ctx.fillStyle='#e6edf3';ctx.font='9px monospace';ctx.textAlign='center';
+          ctx.fillText(fvol(dv.vol),w-p.r+1+32.5,vy+3.5);
+        }
       }
     }
   }
@@ -1262,22 +1266,24 @@ function drawMacd(){
   // クロスヘア（MACDライン値バッジは ysLine 基準）
   if(XH.on&&XH.idx>=0){
     const xBar=cx(XH.idx,s,p.l);
-    ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
-    ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
-    ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
-    const mv=MD.ml[XH.idx];
-    if(mv!=null){
-      const my=ysLine(mv);
-      if(isMob()){
-        ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r-68,my-7,66,14);
-        ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
-        ctx.fillText(mv.toFixed(2),w-p.r-35,my+3.5);
-      }else{
-        ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r+1,my-7,65,14);
-        ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
-        ctx.fillText(mv.toFixed(2),w-p.r+1+32.5,my+3.5);
+    if(xBar>=p.l&&xBar<=w-p.r){
+      ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+      ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
+      const mv=MD.ml[XH.idx];
+      if(mv!=null){
+        const my=ysLine(mv);
+        if(isMob()){
+          ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r-68,my-7,66,14);
+          ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+          ctx.fillText(mv.toFixed(2),w-p.r-35,my+3.5);
+        }else{
+          ctx.fillStyle='#2196f3';ctx.fillRect(w-p.r+1,my-7,65,14);
+          ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+          ctx.fillText(mv.toFixed(2),w-p.r+1+32.5,my+3.5);
+        }
       }
     }
   }
@@ -1344,22 +1350,24 @@ function drawRsi(){
   // Crosshair
   if(XH.on&&XH.idx>=0){
     const xBar=cx(XH.idx,s,p.l);
-    ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
-    ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
-    ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
-    const rv=RSI_DATA[XH.idx];
-    if(rv!=null){
-      const ry=ys(rv);
-      if(isMob()){
-        ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r-68,ry-7,66,14);
-        ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
-        ctx.fillText(rv.toFixed(1),w-p.r-35,ry+3.5);
-      }else{
-        ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r+1,ry-7,65,14);
-        ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
-        ctx.fillText(rv.toFixed(1),w-p.r+1+32.5,ry+3.5);
+    if(xBar>=p.l&&xBar<=w-p.r){
+      ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+      ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
+      const rv=RSI_DATA[XH.idx];
+      if(rv!=null){
+        const ry=ys(rv);
+        if(isMob()){
+          ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r-68,ry-7,66,14);
+          ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+          ctx.fillText(rv.toFixed(1),w-p.r-35,ry+3.5);
+        }else{
+          ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r+1,ry-7,65,14);
+          ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+          ctx.fillText(rv.toFixed(1),w-p.r+1+32.5,ry+3.5);
+        }
       }
     }
   }
@@ -1615,6 +1623,7 @@ ALL_PANES.forEach(id=>{
 
 function showTouchXH(touch,paneId){
   const pane=$(paneId),r=pane.getBoundingClientRect(),localX=touch.clientX-r.left;
+  if(localX>pane.clientWidth-PAD.main.r) return;  // 価格軸エリアはスキップ
   XH.on=true;XH.sx=localX;XH.sy=touch.clientY-r.top;
   const {s}=slice(pane.clientWidth,PAD.main);
   XH.idx=Math.max(s,Math.min(DATA.length-1,s+Math.round((localX-PAD.main.l)/bw())));
