@@ -733,18 +733,15 @@ function drawMain(){
   const rng=hi-lo||1; lo-=rng*0.06; hi+=rng*0.06;
   const ys=v=>p.t+ph*(1-(v-lo)/(hi-lo));
 
-  // grid
+  // grid lines only (before clip)
   ctx.strokeStyle='#21262d'; ctx.lineWidth=0.5;
   for(let i=0;i<=5;i++){
     const y=p.t+ph*i/5;
     ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();
-    const lx=isMob()?w-p.r-2:w-p.r+65;
-    ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
-    ctx.fillText(fmt(hi-(hi-lo)*i/5),lx,y+3.5);
   }
 
   ctx.save();
-  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,h-p.t-p.b);ctx.clip();
+  ctx.beginPath();ctx.rect(p.l,0,w-p.l-p.r,h);ctx.clip();
 
   // Bollinger Bands
   if(IND.bb){
@@ -802,10 +799,15 @@ function drawMain(){
 
   ctx.restore();
 
+  // Price labels (drawn after restore so they appear on top of chart content)
+  {const lx=isMob()?w-p.r-2:w-p.r+65;
+  ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
+  for(let i=0;i<=5;i++){const y=p.t+ph*i/5;ctx.fillText(fmt(hi-(hi-lo)*i/5),lx,y+3.5);}}
+
   // Date labels
   const cnt=e-s,step=Math.max(1,Math.floor(cnt/6));
   ctx.fillStyle='#484f58'; ctx.font='9px sans-serif'; ctx.textAlign='center';
-  for(let k=0;k<cnt;k+=step){const i=s+k;ctx.fillText(DATA[i].date.replace(/^\d{4}\//,''),cx(i,s,p.l),h-p.b+13);}
+  for(let k=0;k<cnt;k+=step){const i=s+k;const x=cx(i,s,p.l);if(x>w-p.r-2)continue;ctx.fillText(DATA[i].date.replace(/^\d{4}\//,''),x,h-p.b+13);}
 
   // Overlays
   if(OVL.hlineMode>0)   drawHorizontalLines(ctx,s,e,ys,w,p);
