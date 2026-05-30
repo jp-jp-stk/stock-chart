@@ -68,11 +68,15 @@ def coerce_types(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_existing_merged(path: Path) -> pd.DataFrame:
-    """既存の結合済みCSV を読み込む（なければ空 DataFrame）"""
+    """既存の結合済みCSV を読み込む（なければ空 DataFrame）。
+    既存データは補正済みとして _split_adjusted=True を付与する。
+    """
     if not path.exists():
         return pd.DataFrame()
     try:
-        return pd.read_csv(path, encoding="utf-8", dtype=str)
+        df = pd.read_csv(path, encoding="utf-8", dtype=str)
+        df["_split_adjusted"] = True
+        return df
     except Exception:
         return pd.DataFrame()
 
@@ -145,6 +149,8 @@ def apply_splits(df_sc: pd.DataFrame, splits_df: pd.DataFrame, sc: str) -> pd.Da
     splits_df の date 列は 'YYYY/MM/DD' 文字列。
     df_sc の '日付' 列は datetime 型。
     KABU+ データ開始日（2025/05/01）以降の分割のみ対象。
+    _split_adjusted=False かつ 分割前価格水準（price_threshold 以上）の行のみ補正し、
+    二重補正・yfinance調整済みデータへの誤補正を防止する。
     """
     sc_splits = splits_df[
         (splits_df["SC"] == sc) &
@@ -154,38 +160,66 @@ def apply_splits(df_sc: pd.DataFrame, splits_df: pd.DataFrame, sc: str) -> pd.Da
     if sc_splits.empty:
         return df_sc
 
+    # 補正済みフラグ列がなければ追加（既存データは補正済み扱い）
+    if "_split_adjusted" not in df_sc.columns:
+        df_sc["_split_adjusted"] = True
+
     for _, split in sc_splits.iterrows():
         # YYYY/MM/DD → pd.Timestamp に変換して datetime 列と比較
-        split_ts = pd.Timestamp(split["date"].replace("/", "-"))
-        ratio    = split["ratio"]
-
-        # 補正対象: KABU+ 生データ取得開始日(2025/05/01) 〜 分割日の前日
-        # Jan〜Apr のデータは KABU+ が自動で調整済みのため対象外
-        # May 1〜(分割日-1) のデータのみ未調整なので ÷ratio で補正
+        split_ts       = pd.Timestamp(split["date"].replace("/", "-"))
+        ratio          = split["ratio"]
         kabu_raw_start = pd.Timestamp("2025-05-01")
-        mask = (df_sc["日付"] >= kabu_raw_start) & (df_sc["日付"] < split_ts)
+
+        # 分割直後の最初の株価を基準に補正閾値を設定
+        # 例: 分割後価格3,074円 × 6 × 0.5 = 9,222円
+        # → 9,222円以上の行のみ補正対象（未調整の生データ水準）
+        # → 3,074円など既に調整済みの行は閾値未満でスキップ
+        post_split = df_sc[df_sc["日付"] >= split_ts]
+        if post_split.empty:
+            continue
+        post_price = pd.to_numeric(post_split["株価"].iloc[0], errors="coerce")
+        if pd.isna(post_price):
+            continue
+        price_threshold = post_price * ratio * 0.5
+
+        mask = (
+            (df_sc["日付"] >= kabu_raw_start) &
+            (df_sc["日付"] < split_ts) &
+            (df_sc["_split_adjusted"] == False) &  # noqa: E712
+            (pd.to_numeric(df_sc["株価"], errors="coerce") >= price_threshold)
+        )
         if mask.sum() == 0:
             continue
 
         for col in ["株価", "始値", "高値", "安値", "前日終値"]:
             if col in df_sc.columns:
-                df_sc.loc[mask, col] = df_sc.loc[mask, col] / ratio
+                df_sc.loc[mask, col] = (
+                    pd.to_numeric(df_sc.loc[mask, col], errors="coerce") / ratio
+                )
 
         # 出来高は逆に ratio 倍
         if "出来高" in df_sc.columns:
-            df_sc.loc[mask, "出来高"] = df_sc.loc[mask, "出来高"] * ratio
+            df_sc.loc[mask, "出来高"] = (
+                pd.to_numeric(df_sc.loc[mask, "出来高"], errors="coerce") * ratio
+            )
 
-        print(f"  補正: SC{sc} {split['date']} ÷{ratio} ({mask.sum()}行)")
+        # 補正済みフラグをTrueに更新
+        df_sc.loc[mask, "_split_adjusted"] = True
+        print(f"  補正: SC{sc} {split['date']} ÷{ratio} ({mask.sum()}行)"
+              f"  [閾値: {price_threshold:,.0f}円]")
 
     return df_sc
 
 
 def save_csv(df: pd.DataFrame, path: Path):
-    """DataFrame を UTF-8 CSV として保存（ファイルロック時は最大3回リトライ）"""
+    """DataFrame を UTF-8 CSV として保存（ファイルロック時は最大3回リトライ）。
+    内部管理用の _split_adjusted 列は除外して保存する。
+    """
+    out = df.drop(columns=["_split_adjusted"], errors="ignore")
     path.parent.mkdir(parents=True, exist_ok=True)
     for attempt in range(3):
         try:
-            df.to_csv(path, index=False, encoding="utf-8")
+            out.to_csv(path, index=False, encoding="utf-8")
             return
         except PermissionError:
             if attempt < 2:
@@ -250,11 +284,15 @@ def main():
             ]
             skipped = len(year_df) - len(new_rows)
             total_skipped += skipped
+            if not new_rows.empty:
+                new_rows = new_rows.copy()
+                new_rows["_split_adjusted"] = False  # 新規行は未補正
             merged = pd.concat([existing, new_rows], ignore_index=True) if not new_rows.empty else existing.copy()
             merged = coerce_types(merged)
             added_count = len(new_rows)
         else:
             merged = year_df.copy()
+            merged["_split_adjusted"] = False  # 全行が新規（初回取込）
             added_count = len(year_df)
             skipped = 0
 

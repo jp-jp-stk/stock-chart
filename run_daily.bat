@@ -28,29 +28,42 @@ echo ================================================== >> "%LOG%"
 echo [DAILY START] %date% %time% >> "%LOG%"
 echo ================================================== >> "%LOG%"
 
-echo [1/2] download_prices.py ...
-echo [1/2] download_prices.py ... >> "%LOG%"
+echo [1/3] download_prices.py ...
+echo [1/3] download_prices.py ... >> "%LOG%"
 "%PYTHON%" download_prices.py >> "%LOG%" 2>&1
 set RC=%ERRORLEVEL%
 if %RC% EQU 0 (
-    echo [1/2] download_prices.py: OK
-    echo [1/2] download_prices.py: OK >> "%LOG%"
+    echo [1/3] download_prices.py: OK
+    echo [1/3] download_prices.py: OK >> "%LOG%"
 ) else (
-    echo [1/2] download_prices.py: FAILED  code=%RC%
-    echo [1/2] download_prices.py: FAILED  code=%RC% >> "%LOG%"
+    echo [1/3] download_prices.py: FAILED  code=%RC%
+    echo [1/3] download_prices.py: FAILED  code=%RC% >> "%LOG%"
     set ERR=1
 )
 
-echo [2/2] merge_prices.py ...
-echo [2/2] merge_prices.py ... >> "%LOG%"
+echo [2/3] get_splits.py ...
+echo [2/3] get_splits.py ... >> "%LOG%"
+"%PYTHON%" get_splits.py >> "%LOG%" 2>&1
+set RC=%ERRORLEVEL%
+if %RC% EQU 0 (
+    echo [2/3] get_splits.py: OK
+    echo [2/3] get_splits.py: OK >> "%LOG%"
+) else (
+    echo [2/3] get_splits.py: FAILED  code=%RC%
+    echo [2/3] get_splits.py: FAILED  code=%RC% >> "%LOG%"
+    set ERR=1
+)
+
+echo [3/3] merge_prices.py ...
+echo [3/3] merge_prices.py ... >> "%LOG%"
 "%PYTHON%" merge_prices.py >> "%LOG%" 2>&1
 set RC=%ERRORLEVEL%
 if %RC% EQU 0 (
-    echo [2/2] merge_prices.py: OK
-    echo [2/2] merge_prices.py: OK >> "%LOG%"
+    echo [3/3] merge_prices.py: OK
+    echo [3/3] merge_prices.py: OK >> "%LOG%"
 ) else (
-    echo [2/2] merge_prices.py: FAILED  code=%RC%
-    echo [2/2] merge_prices.py: FAILED  code=%RC% >> "%LOG%"
+    echo [3/3] merge_prices.py: FAILED  code=%RC%
+    echo [3/3] merge_prices.py: FAILED  code=%RC% >> "%LOG%"
     set ERR=1
 )
 

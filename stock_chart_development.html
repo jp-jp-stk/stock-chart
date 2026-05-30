@@ -707,10 +707,22 @@ function prep(id){
 /* ═══════════════════════════════════════════
    VIEWPORT
 ═══════════════════════════════════════════ */
-function visCnt(w,p){return Math.max(1,Math.floor((w-p.l-p.r)/bw()));}
+function visCnt(w,p){return Math.max(1,Math.floor((w-p.l-p.r-16)/bw()));}
 function clamp(o){const w=$('pane-main').clientWidth||300,v=visCnt(w,PAD.main);return Math.max(0,Math.min(Math.max(0,DATA.length-v),o));}
 function slice(w,p){const v=visCnt(w,p),s=Math.max(0,Math.round(V.offset));return{s,e:Math.min(DATA.length,s+v)};}
 function cx(i,s,l){return l+(i-s)*bw()+V.barW/2;}
+
+/* ═══════════════════════════════════════════
+   MA75 SLOPE HELPER
+═══════════════════════════════════════════ */
+function getMA75Direction(i){
+  const N=5, THRESHOLD=0.001;
+  if(i<N) return 'flat';
+  for(let k=i-N+1;k<=i;k++){if(MA75[k]==null) return 'flat';}
+  const rate=(MA75[i]-MA75[i-N+1])/MA75[i-N+1];
+  if(Math.abs(rate)<=THRESHOLD) return 'flat';
+  return rate>0?'up':'down';
+}
 
 /* ═══════════════════════════════════════════
    DRAW MAIN
@@ -742,6 +754,31 @@ function drawMain(){
 
   ctx.save();
   ctx.beginPath();ctx.rect(p.l,0,w-p.l-p.r,h);ctx.clip();
+
+  // ── MA75 カラー背景ゾーン ───────────────────
+  if(IND.ma){
+    const bwVal=bw();
+    for(let i=s;i<e;i++){
+      if(MA75[i]==null) continue;
+      const close=DATA[i].close, ma75val=MA75[i];
+      const x=cx(i,s,p.l);
+      const yMA75=ys(ma75val), yClose=ys(close);
+      const dir=getMA75Direction(i);
+      if(dir==='flat') continue;
+      let color;
+      if(dir==='up'){
+        color=close>ma75val?'rgba(220,50,50,0.25)':'rgba(220,50,50,0.07)';
+      }else{
+        color=close<ma75val?'rgba(50,100,220,0.25)':'rgba(50,100,220,0.07)';
+      }
+      const yTop=Math.min(yMA75,yClose), yBottom=Math.max(yMA75,yClose);
+      const height=yBottom-yTop;
+      if(height<0.5) continue;
+      ctx.fillStyle=color;
+      ctx.fillRect(x-bwVal/2,yTop,bwVal,height);
+    }
+  }
+  // ────────────────────────────────────────────
 
   // Bollinger Bands
   if(IND.bb){
@@ -1559,9 +1596,9 @@ function onMove(e,paneId){
   const pane=$(paneId),r=pane.getBoundingClientRect(),localX=e.clientX-r.left;
   XH.on=true; XH.sx=localX;
   if(paneId==='pane-main') XH.sy=e.clientY-r.top;
-  const {s}=slice(pane.clientWidth,PAD.main);
+  const {s,e:end}=slice(pane.clientWidth,PAD.main);
   const j=Math.round((localX-PAD.main.l)/bw());
-  XH.idx=Math.max(s,Math.min(DATA.length-1,s+j));
+  XH.idx=Math.max(s,Math.min(end-1,s+j));
   updIB(XH.idx); updTooltip(XH.idx); drawAll();
 }
 function onLeave(){
@@ -1625,8 +1662,8 @@ function showTouchXH(touch,paneId){
   const pane=$(paneId),r=pane.getBoundingClientRect(),localX=touch.clientX-r.left;
   if(localX>pane.clientWidth-PAD.main.r) return;  // 価格軸エリアはスキップ
   XH.on=true;XH.sx=localX;XH.sy=touch.clientY-r.top;
-  const {s}=slice(pane.clientWidth,PAD.main);
-  XH.idx=Math.max(s,Math.min(DATA.length-1,s+Math.round((localX-PAD.main.l)/bw())));
+  const {s,e:end}=slice(pane.clientWidth,PAD.main);
+  XH.idx=Math.max(s,Math.min(end-1,s+Math.round((localX-PAD.main.l)/bw())));
   updTooltip(XH.idx);drawAll();
 }
 function hideTouchXH(){XH.on=false;XH.idx=-1;$('xh-tooltip').style.display='none';drawAll();}
