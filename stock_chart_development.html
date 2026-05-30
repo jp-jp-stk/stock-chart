@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>株価チャート</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#d4a853">
@@ -744,7 +744,7 @@ function drawMain(){
   }
 
   ctx.save();
-  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,ph);ctx.clip();
+  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,h-p.t-p.b);ctx.clip();
 
   // Bollinger Bands
   if(IND.bb){
@@ -1134,7 +1134,7 @@ function drawVol(){
   ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
   ctx.fillText(fvol(maxV),isMob()?w-p.r-2:w-p.r+65,p.t+9);
   ctx.save();
-  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,ph);ctx.clip();
+  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,h-p.t-p.b);ctx.clip();
   for(let i=s;i<e;i++){
     const d=DATA[i],bull=d.close>=d.open;
     ctx.fillStyle=bull?'rgba(239,83,80,.55)':'rgba(38,166,154,.55)';
@@ -1199,7 +1199,7 @@ function drawMacd(){
   ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(w-p.r,p.t);ctx.stroke();
 
   ctx.save();
-  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,ph);ctx.clip();
+  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,h-p.t-p.b);ctx.clip();
 
   // ヒストグラム（ysHist 基準）
   for(let i=s;i<e;i++){
@@ -1581,6 +1581,7 @@ let t1=null,tO=0,tD=0,tBW=0;
 ALL_PANES.forEach(id=>{
   const el=$(id);
   el.addEventListener('touchstart',e=>{
+    if(e.touches.length===2) e.preventDefault();
     if(e.touches.length===1){
       t1={x:e.touches[0].clientX,y:e.touches[0].clientY,moved:false};tO=V.offset;
       t1.timer=setTimeout(()=>{if(t1&&!t1.moved){t1.xhMode=true;showTouchXH(e.touches[0],id);}},300);
@@ -1589,8 +1590,9 @@ ALL_PANES.forEach(id=>{
       tD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
       tBW=V.barW;tO=V.offset;
     }
-  },{passive:true});
+  },{passive:false});
   el.addEventListener('touchmove',e=>{
+    if(e.touches.length===2) e.preventDefault();
     if(e.touches.length===1&&t1){
       const dx=Math.abs(e.touches[0].clientX-t1.x),dy=Math.abs(e.touches[0].clientY-t1.y);
       if(!t1.moved&&(dx>5||dy>5))t1.moved=true;
@@ -1600,7 +1602,7 @@ ALL_PANES.forEach(id=>{
       const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
       V.barW=Math.max(1,Math.min(60,Math.round(tBW*(d/tD))));V.gap=Math.max(1,Math.round(V.barW*.2));drawAll();
     }
-  },{passive:true});
+  },{passive:false});
   el.addEventListener('touchend',()=>{if(t1&&t1.timer)clearTimeout(t1.timer);if(t1&&!t1.xhMode)hideTouchXH();t1=null;},{passive:true});
 });
 
