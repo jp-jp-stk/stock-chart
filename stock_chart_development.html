@@ -869,6 +869,8 @@ function drawHorizontalLines(ctx,s,e,ys,w,p){
   const dedupe=arr=>arr.filter((v,i,a)=>a.findIndex(u=>Math.abs(u-v)<threshold)===i);
 
   ctx.save();
+  const hHL=ctx.canvas.parentElement.clientHeight;
+  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,hHL-p.t-p.b);ctx.clip();
   const drawLines=(prices,color)=>{
     prices.forEach(price=>{
       const y=ys(price);
@@ -931,7 +933,9 @@ function drawTrendLines(ctx,s,e,ys,w,p){
 function drawBreakoutSignals(ctx,s,e,ys,w,p){
   if(e<=s)return;
   const period=25;
+  const hBS=ctx.canvas.parentElement.clientHeight;
   ctx.save();
+  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,hBS-p.t-p.b);ctx.clip();
   for(let i=s+period;i<e;i++){
     let refHigh=-Infinity,sumVol=0;
     for(let j=i-period;j<i;j++){
@@ -1014,6 +1018,7 @@ function drawEarningsMarks(ctx,s,e,ys,w,p){
   }
 
   ctx.save();
+  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,h-p.t-p.b);ctx.clip();
   for(let i=s;i<e;i++){
     const rec=barRecMap.get(i);
     if(!rec)continue;
