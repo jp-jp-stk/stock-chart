@@ -591,67 +591,70 @@ function calcDivergence(){
   DIV_DATA=[];
   const n=DATA.length;
   if(n<20||!MD.hist.length)return;
-  const WING=5,MIN_GAP=15,MAX_GAP=50;
 
-  // ヒスト標準偏差（ゼロクロス品質判定用）
-  const histVals=MD.hist.filter(v=>v!=null);
-  const histMean=histVals.reduce((a,b)=>a+b,0)/histVals.length;
-  const histStd=Math.sqrt(histVals.reduce((a,b)=>a+(b-histMean)**2,0)/histVals.length);
+  const MIN_GAP=5, MAX_GAP=120, MIN_BARS=2;
 
-  // 局所高値・安値をヒストグラム基準で検出
-  const lows=[],highs=[];
-  for(let i=WING;i<n-WING;i++){
-    if(MD.hist[i]==null)continue;
-    let isLow=true,isHigh=true;
-    for(let k=1;k<=WING;k++){
-      if(MD.hist[i-k]==null||MD.hist[i+k]==null){isLow=false;isHigh=false;break;}
-      if(MD.hist[i-k]<=MD.hist[i]||MD.hist[i+k]<=MD.hist[i])isLow =false;
-      if(MD.hist[i-k]>=MD.hist[i]||MD.hist[i+k]>=MD.hist[i])isHigh=false;
+  // ── ヒストグラムのクラスターを検出 ──────────────
+  function getClusters(sign){
+    const clusters=[];
+    let inCluster=false, start=-1;
+    for(let i=0;i<n;i++){
+      const h=MD.hist[i];
+      if(h==null)continue;
+      const isSign=sign==='minus'?h<0:h>0;
+      if(isSign&&!inCluster){inCluster=true;start=i;}
+      else if(!isSign&&inCluster){
+        inCluster=false;
+        const end=i-1;
+        if(end-start+1<MIN_BARS)continue;
+        let extremeVal=sign==='minus'?Infinity:-Infinity, extremeIdx=start;
+        let priceExtreme=sign==='minus'?Infinity:-Infinity, priceExtremeIdx=start;
+        for(let k=start;k<=end;k++){
+          if(MD.hist[k]==null)continue;
+          if(sign==='minus'&&MD.hist[k]<extremeVal){extremeVal=MD.hist[k];extremeIdx=k;}
+          if(sign==='plus' &&MD.hist[k]>extremeVal){extremeVal=MD.hist[k];extremeIdx=k;}
+          if(sign==='minus'&&DATA[k].low <priceExtreme){priceExtreme=DATA[k].low; priceExtremeIdx=k;}
+          if(sign==='plus' &&DATA[k].high>priceExtreme){priceExtreme=DATA[k].high;priceExtremeIdx=k;}
+        }
+        clusters.push({start,end,extremeVal,extremeIdx,priceExtreme,priceExtremeIdx});
+      }
     }
-    if(isLow  &&MD.hist[i]<0)lows.push(i);   // 0未満の局所安値
-    if(isHigh &&MD.hist[i]>0)highs.push(i);  // 0超の局所高値
+    return clusters;
   }
 
-  // Bullish：株価安値切り下げ + ヒスト安値切り上げ
-  for(let j=1;j<lows.length;j++){
-    const i1=lows[j-1],i2=lows[j];
-    if(i2-i1<MIN_GAP||i2-i1>MAX_GAP)continue;
-    const h1=MD.hist[i1],h2=MD.hist[i2];
-    if(h1==null||h2==null)continue;
-    // 両ピークが有意な深さであること（ゼロかすりに近い値を除外）
-    if(Math.abs(h1)<histStd*0.5||Math.abs(h2)<histStd*0.5)continue;
-    if(h2<=h1)continue;  // ヒスト切り上げ確認
-    // 株価は±WING内の最小値で比較
-    const p1=Math.min(...DATA.slice(Math.max(0,i1-WING),i1+WING+1).map(d=>d.low));
-    const p2=Math.min(...DATA.slice(Math.max(0,i2-WING),i2+WING+1).map(d=>d.low));
-    if(p2>=p1)continue;  // 株価切り下げ確認
-    // ゼロクロス：3本以上 かつ 十分な高さ
-    const crossVals=[];
-    for(let k=i1+1;k<i2;k++){if(MD.hist[k]!=null&&MD.hist[k]>0)crossVals.push(MD.hist[k]);}
-    if(crossVals.length<3)continue;
-    if(Math.max(...crossVals)<histStd*0.5)continue;
-    DIV_DATA.push({type:'bull',idx1:i1,idx2:i2});
+  const minusClusters=getClusters('minus');
+  const plusClusters =getClusters('plus');
+
+  // ── 強気ダイバージェンス（Bullish） ──────────────
+  // マイナス塊①→プラス塊1つ→マイナス塊②
+  // 株価：塊①最安値 > 塊②最安値（切り下げ）
+  // ヒスト：塊①最小値 < 塊②最小値（切り上げ）
+  for(let j=1;j<minusClusters.length;j++){
+    const c1=minusClusters[j-1],c2=minusClusters[j];
+    const gap=c2.start-c1.end;
+    if(gap<MIN_GAP||gap>MAX_GAP)continue;
+    const between=plusClusters.filter(p=>p.start>c1.end&&p.end<c2.start);
+    if(between.length!==1)continue;
+    if(c2.priceExtreme>=c1.priceExtreme)continue;  // 株価切り下げ
+    if(c2.extremeVal<=c1.extremeVal)continue;       // ヒスト切り上げ
+    DIV_DATA.push({type:'bull',idx1:c1.extremeIdx,idx2:c2.extremeIdx,
+                   priceIdx1:c1.priceExtremeIdx,priceIdx2:c2.priceExtremeIdx});
   }
 
-  // Bearish：株価高値切り上げ + ヒスト高値切り下げ
-  for(let j=1;j<highs.length;j++){
-    const i1=highs[j-1],i2=highs[j];
-    if(i2-i1<MIN_GAP||i2-i1>MAX_GAP)continue;
-    const h1=MD.hist[i1],h2=MD.hist[i2];
-    if(h1==null||h2==null)continue;
-    // 両ピークが有意な高さであること（ゼロかすりに近い値を除外）
-    if(h1<histStd*0.5||h2<histStd*0.5)continue;
-    if(h2>=h1)continue;  // ヒスト切り下げ確認
-    // 株価は±WING内の最大値で比較
-    const p1=Math.max(...DATA.slice(Math.max(0,i1-WING),i1+WING+1).map(d=>d.high));
-    const p2=Math.max(...DATA.slice(Math.max(0,i2-WING),i2+WING+1).map(d=>d.high));
-    if(p2<=p1)continue;  // 株価切り上げ確認
-    // ゼロクロス：3本以上 かつ 十分な高さ
-    const crossVals=[];
-    for(let k=i1+1;k<i2;k++){if(MD.hist[k]!=null&&MD.hist[k]<0)crossVals.push(MD.hist[k]);}
-    if(crossVals.length<3)continue;
-    if(Math.max(...crossVals.map(Math.abs))<histStd*0.5)continue;
-    DIV_DATA.push({type:'bear',idx1:i1,idx2:i2});
+  // ── 弱気ダイバージェンス（Bearish） ──────────────
+  // プラス塊①→マイナス塊1つ→プラス塊②
+  // 株価：塊①最高値 < 塊②最高値（切り上げ）
+  // ヒスト：塊①最大値 > 塊②最大値（切り下げ）
+  for(let j=1;j<plusClusters.length;j++){
+    const c1=plusClusters[j-1],c2=plusClusters[j];
+    const gap=c2.start-c1.end;
+    if(gap<MIN_GAP||gap>MAX_GAP)continue;
+    const between=minusClusters.filter(p=>p.start>c1.end&&p.end<c2.start);
+    if(between.length!==1)continue;
+    if(c2.priceExtreme<=c1.priceExtreme)continue;  // 株価切り上げ
+    if(c2.extremeVal>=c1.extremeVal)continue;       // ヒスト切り下げ
+    DIV_DATA.push({type:'bear',idx1:c1.extremeIdx,idx2:c2.extremeIdx,
+                   priceIdx1:c1.priceExtremeIdx,priceIdx2:c2.priceExtremeIdx});
   }
 }
 
@@ -814,22 +817,19 @@ function drawMain(){
     ctx.fillRect(x-V.barW/2,Math.min(yO,yC),V.barW,Math.max(1,Math.abs(yO-yC)));
   }
 
-  // Divergence arrows
+  // Divergence marks (🐂 bull / 🐻 bear) — 株価極値の位置に表示
   if(DIV_DATA.length&&IND.macd){
+    ctx.font='14px sans-serif';ctx.textAlign='center';
     for(const dv of DIV_DATA){
-      const {type,idx2}=dv;
-      if(idx2<s||idx2>=e)continue;
-      const x=cx(idx2,s,p.l);
-      const d2=DATA[idx2];
-      ctx.lineWidth=1;
-      if(type==='bull'){
-        const ay=ys(d2.low)+3;
-        ctx.fillStyle='#ef5350';
-        ctx.beginPath();ctx.moveTo(x,ay);ctx.lineTo(x-4,ay+8);ctx.lineTo(x+4,ay+8);ctx.closePath();ctx.fill();
+      const pi2=dv.priceIdx2??dv.idx2;
+      if(pi2<s||pi2>=e)continue;
+      const x=cx(pi2,s,p.l);
+      if(dv.type==='bull'){
+        const ay=ys(DATA[pi2].low)+3;
+        ctx.fillText('🐂',x,ay+16);
       }else{
-        const ay=ys(d2.high)-3;
-        ctx.fillStyle='#26a69a';
-        ctx.beginPath();ctx.moveTo(x,ay);ctx.lineTo(x-4,ay-8);ctx.lineTo(x+4,ay-8);ctx.closePath();ctx.fill();
+        const ay=ys(DATA[pi2].high)-3;
+        ctx.fillText('🐻',x,ay-6);
       }
     }
   }
@@ -1299,6 +1299,26 @@ function drawMacd(){
     }
   }
   ctx.restore();
+
+  // ── MACDヒストグラム反転シグナル ──────────────────
+  for(let i=s+2;i<e;i++){
+    const h0=MD.hist[i],h1=MD.hist[i-1],h2=MD.hist[i-2];
+    if(h0==null||h1==null||h2==null)continue;
+    const x=cx(i,s,p.l);
+    // 強気反転（底打ち）：マイナス圏で前日が底・当日が上向き
+    if(h0<0&&h1<0&&h2<0&&h1<=h2&&h0>h1){
+      const y=ysHist(h0);
+      ctx.fillStyle='#ef5350';ctx.font='8px sans-serif';ctx.textAlign='center';
+      ctx.fillText('▲',x,y+10);
+    }
+    // 弱気反転（天井打ち）：プラス圏で前日が天井・当日が下向き
+    if(h0>0&&h1>0&&h2>0&&h1>=h2&&h0<h1){
+      const y=ysHist(h0);
+      ctx.fillStyle='#26a69a';ctx.font='8px sans-serif';ctx.textAlign='center';
+      ctx.fillText('▼',x,y-4);
+    }
+  }
+  // ─────────────────────────────────────────────────
 
   // クロスヘア（MACDライン値バッジは ysLine 基準）
   if(XH.on&&XH.idx>=0){

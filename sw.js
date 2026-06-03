@@ -1,5 +1,5 @@
 // Service Worker for 株価チャート PWA
-const CACHE = 'stock-chart-v12';
+const CACHE = 'stock-chart-v19';
 const SHELL = [
   './stock_chart_development.html',
   './manifest.json',

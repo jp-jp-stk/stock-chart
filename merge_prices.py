@@ -85,6 +85,8 @@ def build_weekly(df: pd.DataFrame) -> pd.DataFrame:
     """
     日次 DataFrame から週次 DataFrame を生成する。
     週の基準: 月曜始まり（ISO 週）
+    注: KABU+ は分割当日から分割後価格を提供するため、
+    　　apply_splits による日次補正後の weekly 集計は追加補正不要。
     """
     df = df.copy().sort_values(["SC", "日付"])
     df["_week"] = df["日付"].dt.to_period("W")
