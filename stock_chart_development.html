@@ -1373,6 +1373,14 @@ function drawRsi(){
   ctx.strokeStyle='#26a69a';ctx.beginPath();ctx.moveTo(p.l,y30);ctx.lineTo(w-p.r,y30);ctx.stroke();
   ctx.setLineDash([]);
 
+  // ── Elderトレンドゾーン背景色 ──────────────────
+  // 上昇トレンドゾーン（50〜70）薄い赤
+  ctx.fillStyle='rgba(220,50,50,0.12)';
+  ctx.fillRect(p.l,y70,cw,y50-y70);
+  // 下降トレンドゾーン（30〜50）薄い青
+  ctx.fillStyle='rgba(50,100,220,0.12)';
+  ctx.fillRect(p.l,y50,cw,y30-y50);
+
   // Fill above 70 (red tint)
   ctx.save();
   ctx.beginPath();ctx.rect(p.l,p.t,cw,y70-p.t);ctx.clip();
@@ -1397,7 +1405,8 @@ function drawRsi(){
   const drawRsiLine=()=>{ctx.beginPath();let go=false;for(let i=s;i<e;i++){const v=RSI_DATA[i];if(v==null){go=false;continue;}const x=cx(i,s,p.l),y=ys(v);if(!go){ctx.moveTo(x,y);go=true;}else ctx.lineTo(x,y);}ctx.stroke();};
   ctx.lineWidth=1.2;
   ctx.save();ctx.beginPath();ctx.rect(p.l,p.t,cw,y70-p.t);ctx.clip();ctx.strokeStyle='#ef5350';drawRsiLine();ctx.restore();
-  ctx.save();ctx.beginPath();ctx.rect(p.l,y70,cw,y30-y70);ctx.clip();ctx.strokeStyle='#ab47bc';drawRsiLine();ctx.restore();
+  ctx.save();ctx.beginPath();ctx.rect(p.l,y70,cw,y50-y70);ctx.clip();ctx.strokeStyle='rgba(220,50,50,0.9)';drawRsiLine();ctx.restore();
+  ctx.save();ctx.beginPath();ctx.rect(p.l,y50,cw,y30-y50);ctx.clip();ctx.strokeStyle='rgba(50,100,220,0.9)';drawRsiLine();ctx.restore();
   ctx.save();ctx.beginPath();ctx.rect(p.l,y30,cw,h-p.b-y30);ctx.clip();ctx.strokeStyle='#26a69a';drawRsiLine();ctx.restore();
 
   // Labels
