@@ -4,8 +4,8 @@
   "description": "日本株の株価チャートビューア。決算日・トレンドライン・MACDダイバージェンス対応。",
   "start_url": "./stock_chart_development.html",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#d4a853",
+  "background_color": "#0a1428",
+  "theme_color": "#0a1428",
   "orientation": "any",
   "lang": "ja",
   "icons": [

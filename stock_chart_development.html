@@ -4,13 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>株価チャート</title>
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#d4a853">
+<meta name="theme-color" content="#0a1428">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="株チャート">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
 :root{
   --bg:#0d1117;--bg2:#161b22;--bg3:#1c2128;--bd:#30363d;
@@ -585,6 +587,7 @@ function calcSignals(){
   }
   SIG_DATA={ma,bb:bb_s,macd:macd_s,rsi:rsi_s};
   calcDivergence();
+  calcWatchDivergence();
 }
 
 /* ═══════════════════════════════════════════
@@ -662,12 +665,125 @@ function calcDivergence(){
 }
 
 /* ═══════════════════════════════════════════
+   WATCH DIVERGENCE DETECTION（仮シグナル）
+═══════════════════════════════════════════ */
+function calcWatchDivergence(){
+  WATCH_DIV_DATA=[];
+  const n=DATA.length;
+  if(n<20||!MD.hist.length)return;
+
+  const MIN_GAP=5,MAX_GAP=120,MIN_BARS=2;
+  const prev=n-2;  // 前日 ← シグナル付与日
+  if(prev<1)return;
+
+  // 確定済み＋未完結クラスター両方を返す版（isOpen=true で未完結を区別）
+  function getClustersForWatch(sign){
+    const clusters=[];
+    let inCluster=false,start=-1;
+    for(let i=0;i<n;i++){
+      const h=MD.hist[i];
+      if(h==null)continue;
+      const isSign=sign==='minus'?h<0:h>0;
+      if(isSign&&!inCluster){inCluster=true;start=i;}
+      else if(!isSign&&inCluster){
+        inCluster=false;
+        const end=i-1;
+        if(end-start+1<MIN_BARS)continue;
+        let extremeVal=sign==='minus'?Infinity:-Infinity,extremeIdx=start;
+        let priceExtreme=sign==='minus'?Infinity:-Infinity,priceExtremeIdx=start;
+        for(let k=start;k<=end;k++){
+          if(MD.hist[k]==null)continue;
+          if(sign==='minus'&&MD.hist[k]<extremeVal){extremeVal=MD.hist[k];extremeIdx=k;}
+          if(sign==='plus' &&MD.hist[k]>extremeVal){extremeVal=MD.hist[k];extremeIdx=k;}
+          if(sign==='minus'&&DATA[k].low <priceExtreme){priceExtreme=DATA[k].low; priceExtremeIdx=k;}
+          if(sign==='plus' &&DATA[k].high>priceExtreme){priceExtreme=DATA[k].high;priceExtremeIdx=k;}
+        }
+        clusters.push({start,end,extremeVal,extremeIdx,priceExtreme,priceExtremeIdx});
+      }
+    }
+    // 未完結クラスター（現在進行中）
+    if(inCluster){
+      const end=n-1;
+      if(end-start+1>=MIN_BARS){
+        let extremeVal=sign==='minus'?Infinity:-Infinity,extremeIdx=start;
+        let priceExtreme=sign==='minus'?Infinity:-Infinity,priceExtremeIdx=start;
+        for(let k=start;k<=end;k++){
+          if(MD.hist[k]==null)continue;
+          if(sign==='minus'&&MD.hist[k]<extremeVal){extremeVal=MD.hist[k];extremeIdx=k;}
+          if(sign==='plus' &&MD.hist[k]>extremeVal){extremeVal=MD.hist[k];extremeIdx=k;}
+          if(sign==='minus'&&DATA[k].low <priceExtreme){priceExtreme=DATA[k].low; priceExtremeIdx=k;}
+          if(sign==='plus' &&DATA[k].high>priceExtreme){priceExtreme=DATA[k].high;priceExtremeIdx=k;}
+        }
+        clusters.push({start,end,extremeVal,extremeIdx,priceExtreme,priceExtremeIdx,isOpen:true});
+      }
+    }
+    return clusters;
+  }
+
+  const plusClusters =getClustersForWatch('plus');
+  const minusClusters=getClustersForWatch('minus');
+
+  // ── Bear仮シグナル ──────────────────────────────────
+  // プラスクラスター形成中 & 前日が局所ピーク（前々日↑前日↓今日、プラス圏）
+  const lastPlus=plusClusters[plusClusters.length-1];
+  if(lastPlus&&lastPlus.isOpen){
+    const hToday=MD.hist[n-1],hPrev=MD.hist[prev],hPP=MD.hist[prev-1];
+    if(hToday!=null&&hPrev!=null&&hPP!=null&&hPrev>0&&hPrev>hPP&&hPrev>hToday){
+      const c1s=plusClusters.filter(c=>
+        !c.isOpen&&c.end<lastPlus.start&&
+        MIN_GAP<=lastPlus.start-c.end&&lastPlus.start-c.end<=MAX_GAP
+      );
+      if(c1s.length>0){
+        const c1=c1s[c1s.length-1];
+        const between=minusClusters.filter(m=>m.start>c1.end&&m.end<lastPlus.start);
+        if(between.length===1&&
+           lastPlus.priceExtreme>c1.priceExtreme&&   // 株価切り上げ
+           lastPlus.extremeVal  <c1.extremeVal){      // ヒスト切り下げ
+          WATCH_DIV_DATA.push({
+            type:'bear',idx:prev,priceIdx:prev,
+            idx1:c1.extremeIdx,c2PeakIdx:lastPlus.extremeIdx,
+            histVal1:c1.extremeVal,histVal2:lastPlus.extremeVal
+          });
+        }
+      }
+    }
+  }
+
+  // ── Bull仮シグナル ──────────────────────────────────
+  // マイナスクラスター形成中 & 前日が局所ボトム（前々日↓前日↑今日、マイナス圏）
+  const lastMinus=minusClusters[minusClusters.length-1];
+  if(lastMinus&&lastMinus.isOpen){
+    const hToday=MD.hist[n-1],hPrev=MD.hist[prev],hPP=MD.hist[prev-1];
+    if(hToday!=null&&hPrev!=null&&hPP!=null&&hPrev<0&&hPrev<hPP&&hPrev<hToday){
+      const c1s=minusClusters.filter(c=>
+        !c.isOpen&&c.end<lastMinus.start&&
+        MIN_GAP<=lastMinus.start-c.end&&lastMinus.start-c.end<=MAX_GAP
+      );
+      if(c1s.length>0){
+        const c1=c1s[c1s.length-1];
+        const between=plusClusters.filter(p=>p.start>c1.end&&p.end<lastMinus.start);
+        if(between.length===1&&
+           lastMinus.priceExtreme<c1.priceExtreme&&  // 株価切り下げ
+           lastMinus.extremeVal  >c1.extremeVal){     // ヒスト切り上げ
+          WATCH_DIV_DATA.push({
+            type:'bull',idx:prev,priceIdx:prev,
+            idx1:c1.extremeIdx,c2PeakIdx:lastMinus.extremeIdx,
+            histVal1:c1.extremeVal,histVal2:lastMinus.extremeVal
+          });
+        }
+      }
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════
    STATE
 ═══════════════════════════════════════════ */
 let DATA=[], MA5=[], MA25=[], MA75=[], MD={ml:[],sig:[],hist:[]};
 let BB={mid:[],upper2:[],upper1:[],lower1:[],lower2:[]}, RSI_DATA=[];
 let SIG_DATA={ma:[],bb:[],macd:[],rsi:[]};
 let DIV_DATA=[];
+let WATCH_DIV_DATA=[];  // 仮シグナル（Bear?/Bull?）
 let _dbgLastDate=null;
 let DATA_D=[], DATA_W=[], TFRAME='d';
 
@@ -834,6 +950,31 @@ function drawMain(){
         const ay=ys(DATA[pi2].high)-3;
         ctx.fillText('🐻',x,ay-6);
       }
+    }
+  }
+
+  // Watch divergence marks (🐂❓ bull? / 🐻❓ bear?) — 仮シグナル（半透明）
+  if(WATCH_DIV_DATA.length&&IND.macd){
+    ctx.font='14px sans-serif';ctx.textAlign='center';
+    for(const dv of WATCH_DIV_DATA){
+      const pi=dv.priceIdx;
+      if(pi<s||pi>=e)continue;
+      const x=cx(pi,s,p.l);
+      ctx.globalAlpha=0.6;
+      if(dv.type==='bull'){
+        const ay=ys(DATA[pi].low)+3;
+        ctx.fillText('🐂',x,ay+16);
+        ctx.font='10px sans-serif';
+        ctx.fillText('❓',x+10,ay+8);
+        ctx.font='14px sans-serif';
+      }else{
+        const ay=ys(DATA[pi].high)-3;
+        ctx.fillText('🐻',x,ay-6);
+        ctx.font='10px sans-serif';
+        ctx.fillText('❓',x+10,ay-14);
+        ctx.font='14px sans-serif';
+      }
+      ctx.globalAlpha=1.0;
     }
   }
 
@@ -1299,6 +1440,20 @@ function drawMacd(){
       ctx.lineWidth=0.9;ctx.setLineDash([2,3]);
       ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
       ctx.setLineDash([]);
+    }
+  }
+  // 仮シグナル破線（半透明の細破線）
+  if(WATCH_DIV_DATA.length){
+    for(const dv of WATCH_DIV_DATA){
+      const {idx1,c2PeakIdx,histVal1,histVal2}=dv;
+      if(c2PeakIdx<s||idx1>=e)continue;
+      const x1=cx(idx1,s,p.l),    y1=ysHist(histVal1);
+      const x2=cx(c2PeakIdx,s,p.l),y2=ysHist(histVal2);
+      ctx.strokeStyle=dv.type==='bull'?'rgba(239,83,80,0.45)':'rgba(38,166,154,0.45)';
+      ctx.lineWidth=0.8;ctx.setLineDash([2,4]);
+      ctx.globalAlpha=0.7;
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+      ctx.setLineDash([]);ctx.globalAlpha=1.0;
     }
   }
   ctx.restore();
