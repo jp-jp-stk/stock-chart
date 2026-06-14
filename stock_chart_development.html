@@ -742,7 +742,8 @@ function calcWatchDivergence(){
           WATCH_DIV_DATA.push({
             type:'bear',idx:prev,priceIdx:prev,
             idx1:c1.extremeIdx,c2PeakIdx:lastPlus.extremeIdx,
-            histVal1:c1.extremeVal,histVal2:lastPlus.extremeVal
+            histVal1:c1.extremeVal,histVal2:lastPlus.extremeVal,
+            date:DATA[prev].date,histVal:lastPlus.extremeVal
           });
         }
       }
@@ -768,12 +769,54 @@ function calcWatchDivergence(){
           WATCH_DIV_DATA.push({
             type:'bull',idx:prev,priceIdx:prev,
             idx1:c1.extremeIdx,c2PeakIdx:lastMinus.extremeIdx,
-            histVal1:c1.extremeVal,histVal2:lastMinus.extremeVal
+            histVal1:c1.extremeVal,histVal2:lastMinus.extremeVal,
+            date:DATA[prev].date,histVal:lastMinus.extremeVal
           });
         }
       }
     }
   }
+
+  // 現在のシグナルを保存 → 過去履歴を非同期読み込みして再描画
+  if(typeof currentCode!=='undefined'&&currentCode){
+    if(WATCH_DIV_DATA.length>0) saveWatchHistory(currentCode,WATCH_DIV_DATA);
+    loadWatchHistory(currentCode).then(hist=>{
+      WATCH_HISTORY_DATA=hist;
+      drawChart();
+    });
+  }
+}
+
+async function saveWatchHistory(sc,watchData){
+  try{
+    const db=await idbOpen();
+    const tx=db.transaction(STORE_WATCH_HISTORY,'readwrite');
+    const store=tx.objectStore(STORE_WATCH_HISTORY);
+    for(const dv of watchData){
+      store.put({key:`${sc}_${dv.date}`,SC:sc,date:dv.date,
+                 type:dv.type,hist_value:dv.histVal||0,
+                 saved_at:new Date().toISOString()});
+    }
+  }catch(e){}
+}
+
+async function loadWatchHistory(sc){
+  try{
+    const db=await idbOpen();
+    return await new Promise(resolve=>{
+      const tx=db.transaction(STORE_WATCH_HISTORY,'readonly');
+      const store=tx.objectStore(STORE_WATCH_HISTORY);
+      const results=[];
+      const range=IDBKeyRange.bound(`${sc}_`,`${sc}_￿`);
+      const req=store.openCursor(range);
+      req.onsuccess=e=>{
+        const c=e.target.result;
+        if(c){results.push(c.value);c.continue();}
+        else resolve(results);
+      };
+      req.onerror=()=>resolve([]);
+    });
+  }catch(e){return [];}
 }
 
 /* ═══════════════════════════════════════════
@@ -783,7 +826,8 @@ let DATA=[], MA5=[], MA25=[], MA75=[], MD={ml:[],sig:[],hist:[]};
 let BB={mid:[],upper2:[],upper1:[],lower1:[],lower2:[]}, RSI_DATA=[];
 let SIG_DATA={ma:[],bb:[],macd:[],rsi:[]};
 let DIV_DATA=[];
-let WATCH_DIV_DATA=[];  // 仮シグナル（Bear?/Bull?）
+let WATCH_DIV_DATA=[];     // 仮シグナル（Bear?/Bull?）現在分
+let WATCH_HISTORY_DATA=[]; // IndexedDBから読み込んだ過去の仮シグナル履歴
 let _dbgLastDate=null;
 let DATA_D=[], DATA_W=[], TFRAME='d';
 
@@ -976,6 +1020,29 @@ function drawMain(){
       }
       ctx.globalAlpha=1.0;
     }
+  }
+
+  // 過去の仮シグナル履歴を薄く描画（30%透明度）
+  if(WATCH_HISTORY_DATA.length){
+    const curDates=new Set(WATCH_DIV_DATA.map(d=>d.date));
+    ctx.save();
+    ctx.font='14px sans-serif';ctx.textAlign='center';ctx.globalAlpha=0.30;
+    for(const hw of WATCH_HISTORY_DATA){
+      if(curDates.has(hw.date))continue;
+      const bi=DATA.findIndex(d=>d.date===hw.date);
+      if(bi<0||bi<s||bi>=e)continue;
+      const x=cx(bi,s,p.l);
+      if(hw.type==='bull'){
+        const ay=ys(DATA[bi].low)+3;
+        ctx.fillText('🐂',x,ay+16);
+        ctx.font='10px sans-serif';ctx.fillText('❓',x+10,ay+8);ctx.font='14px sans-serif';
+      }else{
+        const ay=ys(DATA[bi].high)-3;
+        ctx.fillText('🐻',x,ay-6);
+        ctx.font='10px sans-serif';ctx.fillText('❓',x+10,ay-14);ctx.font='14px sans-serif';
+      }
+    }
+    ctx.restore();
   }
 
   ctx.restore();
@@ -2085,8 +2152,9 @@ if(Object.keys(FIN_DATA).length)$('fin-ulabel').innerHTML='✓ 財務データ';
 /* ═══════════════════════════════════════════
    INDEXED DB v2
 ═══════════════════════════════════════════ */
-const IDB_NAME='stockChart',IDB_VER=2;
+const IDB_NAME='stockChart',IDB_VER=3;
 const STORE_DAILY='dailyPrices',STORE_WEEKLY='weeklyPrices',STORE_META='fileMeta';
+const STORE_WATCH_HISTORY='watchHistory';
 
 const FILE_DEFS=[
   {fname:'prices_2022.csv',             store:STORE_DAILY,  label:'daily_2022'},
@@ -2116,6 +2184,8 @@ function idbOpen(){
       }
       if(!db.objectStoreNames.contains(STORE_META))
         db.createObjectStore(STORE_META,{keyPath:'label'});
+      if(!db.objectStoreNames.contains(STORE_WATCH_HISTORY))
+        db.createObjectStore(STORE_WATCH_HISTORY,{keyPath:'key'});
     };
     req.onsuccess=e=>res(e.target.result);
     req.onerror=e=>rej(e.target.error);
@@ -2405,6 +2475,7 @@ async function loadChartBySC(sc){
     // TFRAME を実際に表示するデータに同期（日足がなければ週足モードで開始）
     TFRAME=daily.length>0?'d':'w';
     XH.on=false;XH.idx=-1;$('xh-tooltip').style.display='none';
+    WATCH_HISTORY_DATA=[];
     loadData(daily.length?daily:weekly,name);
     updFinDisplay(currentCode);
     if(!daily.length)toast('日足データなし・週足で表示','ok');
