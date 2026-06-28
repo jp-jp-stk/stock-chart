@@ -989,36 +989,29 @@ function drawMain(){
       const x=cx(pi2,s,p.l);
       if(dv.type==='bull'){
         const ay=ys(DATA[pi2].low)+3;
-        ctx.fillText('🐂',x,ay+16);
+        ctx.fillText('🐂',x,ay+28);
       }else{
         const ay=ys(DATA[pi2].high)-3;
-        ctx.fillText('🐻',x,ay-6);
+        ctx.fillText('🐻',x,ay-10);
       }
     }
   }
 
-  // Watch divergence marks (🐂❓ bull? / 🐻❓ bear?) — 仮シグナル（半透明）
+  // Watch divergence marks ▲/▼ — 仮シグナル（半透明）
   if(WATCH_DIV_DATA.length&&IND.macd){
-    ctx.font='14px sans-serif';ctx.textAlign='center';
     for(const dv of WATCH_DIV_DATA){
       const pi=dv.priceIdx;
       if(pi<s||pi>=e)continue;
       const x=cx(pi,s,p.l);
-      ctx.globalAlpha=0.6;
       if(dv.type==='bull'){
-        const ay=ys(DATA[pi].low)+3;
-        ctx.fillText('🐂',x,ay+16);
-        ctx.font='10px sans-serif';
-        ctx.fillText('❓',x+10,ay+8);
-        ctx.font='14px sans-serif';
+        const cy=ys(DATA[pi].low)+10;
+        ctx.fillStyle='#FF00FF';
+        ctx.beginPath();ctx.moveTo(x,cy-6);ctx.lineTo(x-5,cy+6);ctx.lineTo(x+5,cy+6);ctx.closePath();ctx.fill();
       }else{
-        const ay=ys(DATA[pi].high)-3;
-        ctx.fillText('🐻',x,ay-6);
-        ctx.font='10px sans-serif';
-        ctx.fillText('❓',x+10,ay-14);
-        ctx.font='14px sans-serif';
+        const cy=ys(DATA[pi].high)-10;
+        ctx.fillStyle='#FFFF00';
+        ctx.beginPath();ctx.moveTo(x,cy+6);ctx.lineTo(x-5,cy-6);ctx.lineTo(x+5,cy-6);ctx.closePath();ctx.fill();
       }
-      ctx.globalAlpha=1.0;
     }
   }
 
@@ -1026,20 +1019,20 @@ function drawMain(){
   if(WATCH_HISTORY_DATA.length){
     const curDates=new Set(WATCH_DIV_DATA.map(d=>d.date));
     ctx.save();
-    ctx.font='14px sans-serif';ctx.textAlign='center';ctx.globalAlpha=0.30;
+    ctx.globalAlpha=0.60;
     for(const hw of WATCH_HISTORY_DATA){
       if(curDates.has(hw.date))continue;
       const bi=DATA.findIndex(d=>d.date===hw.date);
       if(bi<0||bi<s||bi>=e)continue;
       const x=cx(bi,s,p.l);
       if(hw.type==='bull'){
-        const ay=ys(DATA[bi].low)+3;
-        ctx.fillText('🐂',x,ay+16);
-        ctx.font='10px sans-serif';ctx.fillText('❓',x+10,ay+8);ctx.font='14px sans-serif';
+        const cy=ys(DATA[bi].low)+10;
+        ctx.fillStyle='#FF00FF';
+        ctx.beginPath();ctx.moveTo(x,cy-6);ctx.lineTo(x-5,cy+6);ctx.lineTo(x+5,cy+6);ctx.closePath();ctx.fill();
       }else{
-        const ay=ys(DATA[bi].high)-3;
-        ctx.fillText('🐻',x,ay-6);
-        ctx.font='10px sans-serif';ctx.fillText('❓',x+10,ay-14);ctx.font='14px sans-serif';
+        const cy=ys(DATA[bi].high)-10;
+        ctx.fillStyle='#FFFF00';
+        ctx.beginPath();ctx.moveTo(x,cy+6);ctx.lineTo(x-5,cy-6);ctx.lineTo(x+5,cy-6);ctx.closePath();ctx.fill();
       }
     }
     ctx.restore();
