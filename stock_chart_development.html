@@ -58,6 +58,7 @@ button.ulabel{background:none;}
 #pane-vol {height:13%;min-height:50px;border-top:1px solid var(--bd);}
 #pane-macd{height:18%;min-height:62px;border-top:1px solid var(--bd);}
 #pane-rsi {height:15%;min-height:56px;border-top:1px solid var(--bd);}
+#pane-atr {height:15%;min-height:56px;border-top:1px solid var(--bd);}
 #pane-sig {height:80px;flex-shrink:0;border-top:1px solid var(--bd);background:#161b22;}
 canvas{position:absolute;top:0;left:0;}
 .plabel{position:absolute;top:4px;left:8px;font-size:8px;letter-spacing:2px;color:var(--dm);pointer-events:none;z-index:2;}
@@ -340,12 +341,14 @@ th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:va
       <button class="tf-btn active" id="ind-vol">出来高</button>
       <button class="tf-btn active" id="ind-macd">MACD</button>
       <button class="tf-btn" id="ind-rsi">RSI</button>
+      <button class="tf-btn" id="ind-atr">ATR</button>
       <div class="tf-sep"></div>
       <button class="tf-btn" id="ovl-hline">水平線</button>
       <button class="tf-btn" id="ovl-trend">トレンド</button>
       <button class="tf-btn" id="ovl-breakout">高値ブレイク</button>
       <div class="tf-sep"></div>
       <button class="tf-btn" id="ovl-earnings" disabled>決算日</button>
+      <button class="tf-btn" id="ovl-fire" disabled>Fire</button>
       <div class="nav-btn-wrap">
         <button class="nav-btn" id="nav-prev">◀◀</button>
         <button class="nav-btn" id="nav-next">▶▶</button>
@@ -360,6 +363,7 @@ th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:va
         <div class="xh-row"><span class="xh-lbl">安値</span><span class="xh-val" id="xh-l">—</span></div>
         <div class="xh-row"><span class="xh-lbl">終値</span><span class="xh-val" id="xh-c">—</span></div>
         <div class="xh-row"><span class="xh-lbl">出来高</span><span class="xh-val" id="xh-v">—</span></div>
+        <div class="xh-row"><span class="xh-lbl">出来高MA20</span><span class="xh-val" id="xh-volma">—</span></div>
         <div class="xh-sep" id="xh-sep-ma"></div>
         <div id="xh-rows-ma">
           <div class="xh-row"><span class="xh-lbl">MA5</span><span class="xh-val" id="xh-ma5">—</span></div>
@@ -381,6 +385,10 @@ th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:va
         <div class="xh-sep" id="xh-sep-rsi" style="display:none"></div>
         <div id="xh-rows-rsi" style="display:none">
           <div class="xh-row"><span class="xh-lbl">RSI(14)</span><span class="xh-val" id="xh-rsi">—</span></div>
+        </div>
+        <div class="xh-sep" id="xh-sep-atr" style="display:none"></div>
+        <div id="xh-rows-atr" style="display:none">
+          <div class="xh-row"><span class="xh-lbl">ATR(14)</span><span class="xh-val" id="xh-atr">—</span></div>
         </div>
         <div class="xh-sep" id="xh-sep-div" style="display:none"></div>
         <div id="xh-rows-div" style="display:none">
@@ -410,6 +418,13 @@ th.th-latest{color:var(--tx);background:rgba(212,168,83,.06);}td.latest{color:va
       <div class="pane" id="pane-rsi" style="display:none">
         <div class="plabel">RSI(14)</div>
         <canvas id="c-rsi"></canvas>
+      </div>
+      <div class="pane" id="pane-atr" style="display:none">
+        <div class="mlegend">
+          <div class="mli"><div class="mld" style="background:#4dd0e1"></div><span style="color:var(--dm)">ATR14</span></div>
+          <div class="mli"><div class="mld" style="background:#90a4ae"></div><span style="color:var(--dm)">ATR60</span></div>
+        </div>
+        <canvas id="c-atr"></canvas>
       </div>
       <div class="pane" id="pane-sig"><canvas id="c-sig"></canvas></div>
       <div class="sba" id="sba"><div class="sbt" id="sbt"></div></div>
@@ -549,6 +564,20 @@ function calcRSI(c,n=14){
     r[i]=avgL===0?100:100-100/(1+avgG/avgL);
   }
   return r;
+}
+
+function calcATR(n=14){
+  const tr=new Array(DATA.length).fill(null);
+  for(let i=1;i<DATA.length;i++){
+    const d=DATA[i],prev=DATA[i-1];
+    tr[i]=Math.max(d.high-d.low,Math.abs(d.high-prev.close),Math.abs(d.low-prev.close));
+  }
+  const atr=new Array(DATA.length).fill(null);
+  for(let i=n;i<DATA.length;i++){
+    let sum=0;for(let j=i-n+1;j<=i;j++) sum+=(tr[j]||0);
+    atr[i]=sum/n;
+  }
+  return atr;
 }
 
 function calcSignals(){
@@ -823,7 +852,7 @@ async function loadWatchHistory(sc){
    STATE
 ═══════════════════════════════════════════ */
 let DATA=[], MA5=[], MA25=[], MA75=[], MD={ml:[],sig:[],hist:[]};
-let BB={mid:[],upper2:[],upper1:[],lower1:[],lower2:[]}, RSI_DATA=[];
+let BB={mid:[],upper2:[],upper1:[],lower1:[],lower2:[]}, RSI_DATA=[], ATR_DATA=[], ATR60_DATA=[], VOL_MA20=[];
 let SIG_DATA={ma:[],bb:[],macd:[],rsi:[]};
 let DIV_DATA=[];
 let WATCH_DIV_DATA=[];     // 仮シグナル（Bear?/Bull?）現在分
@@ -831,10 +860,12 @@ let WATCH_HISTORY_DATA=[]; // IndexedDBから読み込んだ過去の仮シグ�
 let _dbgLastDate=null;
 let DATA_D=[], DATA_W=[], TFRAME='d';
 
-const IND={ma:true, bb:false, vol:true, macd:true, rsi:false};
+const IND={ma:true, bb:false, vol:true, macd:true, rsi:false, atr:false};
 const OVL={hlineMode:0, trend:false, breakout:false};
 let EARNINGS=[];
 let OVL_EARNINGS=false;
+let OVL_FIRE=false;
+let FIRE_START_SET=new Set();
 let COMPANY_MASTER=[];
 
 const V={barW:10,gap:2,offset:0};
@@ -847,6 +878,7 @@ const PAD={
   vol: {l:8,r:68,t:4, b:18},
   macd:{l:8,r:68,t:18,b:18},
   rsi: {l:8,r:68,t:14,b:14},
+  atr: {l:8,r:68,t:14,b:14},
 };
 function isMob(){return window.innerWidth<=600;}
 function syncPAD(){
@@ -855,6 +887,7 @@ function syncPAD(){
   PAD.vol.l =m?4:8; PAD.vol.r =m?4:68;
   PAD.macd.l=m?4:8; PAD.macd.r=m?4:68;
   PAD.rsi.l =m?4:8; PAD.rsi.r =m?4:68;
+  PAD.atr.l =m?4:8; PAD.atr.r =m?4:68;
 }
 
 /* ═══════════════════════════════════════════
@@ -933,9 +966,9 @@ function drawMain(){
       if(dir==='flat') continue;
       let color;
       if(dir==='up'){
-        color=close>ma75val?'rgba(220,50,50,0.25)':'rgba(220,50,50,0.07)';
+        color=close>ma75val?'rgba(220,50,50,0.20)':'rgba(220,50,50,0.07)';
       }else{
-        color=close<ma75val?'rgba(50,100,220,0.25)':'rgba(50,100,220,0.07)';
+        color=close<ma75val?'rgba(50,100,220,0.20)':'rgba(50,100,220,0.07)';
       }
       const yTop=Math.min(yMA75,yClose), yBottom=Math.max(yMA75,yClose);
       const height=yBottom-yTop;
@@ -945,6 +978,64 @@ function drawMain(){
     }
   }
   // ────────────────────────────────────────────
+
+  // ── トリプルMA 上昇/下降ゾーン ───────────────────────────────
+  if(IND.ma){
+    const bwVal=bw();
+    for(let i=s;i<e;i++){
+      if(MA5[i]==null||MA25[i]==null) continue;
+      if(i===0||MA5[i-1]==null||MA25[i-1]==null) continue;
+      const dir=getMA75Direction(i);
+      const x=cx(i,s,p.l);
+      const close=DATA[i].close;
+      if(dir==='up'&&MA25[i]>MA25[i-1]&&MA5[i]>MA5[i-1]&&close>MA25[i]){
+        const yTop=ys(close),height=ys(MA25[i])-ys(close);
+        if(height<0.5) continue;
+        ctx.fillStyle='rgba(220,50,50,0.35)';
+        ctx.fillRect(x-bwVal/2,yTop,bwVal,height);
+      }else if(dir==='down'&&MA25[i]<MA25[i-1]&&MA5[i]<MA5[i-1]&&close<MA25[i]){
+        const yTop=ys(MA25[i]),height=ys(close)-ys(MA25[i]);
+        if(height<0.5) continue;
+        ctx.fillStyle='rgba(50,100,220,0.35)';
+        ctx.fillRect(x-bwVal/2,yTop,bwVal,height);
+      }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────
+
+  // ── トリプルMA方向シグナル 🔥❄️ ─────────────────────────────────
+  if(IND.ma){
+    ctx.textAlign='center';
+    for(let i=s;i<e;i++){
+      if(MA5[i]==null||MA25[i]==null) continue;
+      if(i===0||MA5[i-1]==null||MA25[i-1]==null) continue;
+      const dir=getMA75Direction(i);
+      const x=cx(i,s,p.l);
+      const close=DATA[i].close;
+      if(dir==='up'&&MA25[i]>MA25[i-1]&&MA5[i]>MA5[i-1]&&close>MA25[i]){
+        const dirPrev=getMA75Direction(i-1);
+        const prevFire= i>1&&MA5[i-1]!=null&&MA25[i-1]!=null&&MA5[i-2]!=null&&MA25[i-2]!=null
+          &&dirPrev==='up'&&MA25[i-1]>MA25[i-2]&&MA5[i-1]>MA5[i-2]&&DATA[i-1].close>MA25[i-1];
+        const first=!prevFire;
+        ctx.save();
+        ctx.globalAlpha=first?1.0:0.6;
+        ctx.font=(first?'14px':'9px')+' serif';
+        ctx.fillText('🔥',x,ys(DATA[i].high)-4);
+        ctx.restore();
+      }else if(dir==='down'&&MA25[i]<MA25[i-1]&&MA5[i]<MA5[i-1]&&close<MA25[i]){
+        const dirPrev=getMA75Direction(i-1);
+        const prevIce= i>1&&MA5[i-1]!=null&&MA25[i-1]!=null&&MA5[i-2]!=null&&MA25[i-2]!=null
+          &&dirPrev==='down'&&MA25[i-1]<MA25[i-2]&&MA5[i-1]<MA5[i-2]&&DATA[i-1].close<MA25[i-1];
+        const first=!prevIce;
+        ctx.save();
+        ctx.globalAlpha=first?1.0:0.6;
+        ctx.font=(first?'14px':'9px')+' serif';
+        ctx.fillText('❄️',x,ys(DATA[i].low)+4);
+        ctx.restore();
+      }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────
 
   // Bollinger Bands
   if(IND.bb){
@@ -1055,6 +1146,7 @@ function drawMain(){
   if(OVL.trend)         drawTrendLines(ctx,s,e,ys,w,p);
   if(OVL.breakout)      drawBreakoutSignals(ctx,s,e,ys,w,p);
   if(OVL_EARNINGS&&EARNINGS.length>0) drawEarningsMarks(ctx,s,e,ys,w,p);
+  drawFireVLines(ctx,s,e,p,ys);
 
   // Crosshair
   if(XH.on&&XH.idx>=0){
@@ -1274,8 +1366,8 @@ function drawEarningsMarks(ctx,s,e,ys,w,p){
     // 決算後10営業日以内にBreakシグナルがあるか確認
     const nearBreak=checkNearBreak(i,s,e);
     if(nearBreak){
-      // 金色縦ライン（決算後Breakの強調）
-      ctx.strokeStyle='rgba(255,215,0,0.4)';
+      // オレンジ縦ライン（決算後Breakの強調）
+      ctx.strokeStyle='rgba(255,167,38,0.5)';
       ctx.lineWidth=3;ctx.setLineDash([]);
       ctx.beginPath();ctx.moveTo(x,p.t);ctx.lineTo(x,p.t+ph);ctx.stroke();
       // 💰マークを大きく（通常の決算日と区別）
@@ -1297,6 +1389,50 @@ function drawEarningsMarks(ctx,s,e,ys,w,p){
     }
   }
   ctx.setLineDash([]);
+  ctx.restore();
+}
+
+/* ─── FIRE VLINES ──────────────────────────────────────────────────── */
+
+function computeFireClusterStarts(){
+  const set=new Set();
+  if(!DATA.length) return set;
+  for(let i=1;i<DATA.length;i++){
+    if(MA5[i]==null||MA25[i]==null||MA5[i-1]==null||MA25[i-1]==null) continue;
+    if(getMA75Direction(i)!=='up') continue;
+    if(!(MA25[i]>MA25[i-1]&&MA5[i]>MA5[i-1]&&DATA[i].close>MA25[i])) continue;
+    let prevFire=false;
+    if(i>1&&MA5[i-2]!=null&&MA25[i-2]!=null){
+      prevFire=getMA75Direction(i-1)==='up'
+        &&MA25[i-1]>MA25[i-2]&&MA5[i-1]>MA5[i-2]&&DATA[i-1].close>MA25[i-1];
+    }
+    if(!prevFire) set.add(i);
+  }
+  return set;
+}
+
+function drawFireVLines(ctx,s,e,p,ys){
+  if(!OVL_FIRE||FIRE_START_SET.size===0) return;
+  const cw=ctx.canvas.clientWidth,ch=ctx.canvas.clientHeight;
+  ctx.save();
+  ctx.strokeStyle='rgba(255,220,50,0.5)';
+  ctx.lineWidth=3;
+  ctx.setLineDash([]);
+  for(let i=s;i<e;i++){
+    if(!FIRE_START_SET.has(i)) continue;
+    const x=cx(i,s,p.l);
+    if(x<p.l||x>cw-p.r) continue;
+    ctx.beginPath();ctx.moveTo(x,p.t);ctx.lineTo(x,ch-p.b);ctx.stroke();
+  }
+  if(ys){
+    ctx.font='9px monospace';ctx.textAlign='center';ctx.fillStyle='#FFD700';
+    for(let i=s;i<e;i++){
+      if(!FIRE_START_SET.has(i)) continue;
+      const x=cx(i,s,p.l);
+      if(x<p.l||x>cw-p.r) continue;
+      ctx.fillText('ET',x,Math.max(p.t+9,ys(DATA[i].high)-22));
+    }
+  }
   ctx.restore();
 }
 
@@ -1392,6 +1528,20 @@ function drawVol(){
     ctx.fillRect(x-V.barW/2,h-p.b-bh,V.barW,bh);
   }
   ctx.restore();
+  // VOL_MA20 overlay line
+  if(VOL_MA20.length&&maxV){
+    ctx.save();
+    ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,h-p.t-p.b);ctx.clip();
+    ctx.strokeStyle='rgba(200,200,200,0.75)';ctx.lineWidth=1;ctx.beginPath();let goM=false;
+    for(let i=s;i<e;i++){
+      const v=VOL_MA20[i];if(v==null){goM=false;continue;}
+      const x=cx(i,s,p.l),y=h-p.b-(v/maxV)*ph;
+      if(!goM){ctx.moveTo(x,y);goM=true;}else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+  drawFireVLines(ctx,s,e,p,null);
   if(XH.on&&XH.idx>=0){
     const xBar=cx(XH.idx,s,p.l);
     if(xBar>=p.l&&xBar<=w-p.r){
@@ -1537,6 +1687,7 @@ function drawMacd(){
     }
   }
   // ─────────────────────────────────────────────────
+  drawFireVLines(ctx,s,e,p,null);
 
   // クロスヘア（MACDライン値バッジは ysLine 基準）
   if(XH.on&&XH.idx>=0){
@@ -1630,6 +1781,7 @@ function drawRsi(){
   ctx.fillText('70',rlx,y70+3.5);
   ctx.fillText('50',rlx,y50+3.5);
   ctx.fillText('30',rlx,y30+3.5);
+  drawFireVLines(ctx,s,e,p,null);
 
   // Crosshair
   if(XH.on&&XH.idx>=0){
@@ -1651,6 +1803,114 @@ function drawRsi(){
           ctx.fillStyle='#7b1fa2';ctx.fillRect(w-p.r+1,ry-7,65,14);
           ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
           ctx.fillText(rv.toFixed(1),w-p.r+1+32.5,ry+3.5);
+        }
+      }
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DRAW ATR
+═══════════════════════════════════════════ */
+function drawAtr(){
+  const {ctx,w,h}=prep('c-atr');
+  if(!DATA.length) return;
+  const p=PAD.atr,{s,e}=slice(w,p); if(s>=e) return;
+  const ph=h-p.t-p.b;
+
+  const vis14=ATR_DATA.slice(s,e).filter(v=>v!=null);
+  if(!vis14.length) return;
+  const vis60=ATR60_DATA.slice(s,e).filter(v=>v!=null);
+  const maxAll=Math.max(...vis14,...(vis60.length?vis60:[0]));
+  const hiVal=maxAll*1.15||1;
+  const ys=v=>p.t+ph*(1-v/hiVal);
+  const bwVal=bw();
+
+  // top border
+  ctx.strokeStyle='#21262d';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(w-p.r,p.t);ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,ph);ctx.clip();
+
+  // 拡縮カラー塗り（ATR14 vs ATR60）
+  if(vis60.length){
+    for(let i=s;i<e;i++){
+      const v14=ATR_DATA[i],v60=ATR60_DATA[i];
+      if(v14==null||v60==null) continue;
+      const x=cx(i,s,p.l),y14=ys(v14),y60=ys(v60);
+      if(v14>=v60){
+        // ボラティリティ拡大中（ATR14 > ATR60）→ 赤系
+        ctx.fillStyle='rgba(239,83,80,0.2)';
+        ctx.fillRect(x-bwVal/2,y14,bwVal,y60-y14);
+      }else{
+        // 収縮中・スクイーズ（ATR14 < ATR60）→ 青系
+        ctx.fillStyle='rgba(38,166,154,0.2)';
+        ctx.fillRect(x-bwVal/2,y60,bwVal,y14-y60);
+      }
+    }
+  }
+
+  // ATR60 ライン（グレー系）
+  if(vis60.length){
+    ctx.strokeStyle='#90a4ae';ctx.lineWidth=1;ctx.beginPath();let go60=false;
+    for(let i=s;i<e;i++){
+      const v=ATR60_DATA[i];if(v==null){go60=false;continue;}
+      const x=cx(i,s,p.l),y=ys(v);
+      if(!go60){ctx.moveTo(x,y);go60=true;}else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // ATR14 ライン（シアン）
+  ctx.strokeStyle='#4dd0e1';ctx.lineWidth=1.2;ctx.beginPath();let go14=false;
+  for(let i=s;i<e;i++){
+    const v=ATR_DATA[i];if(v==null){go14=false;continue;}
+    const x=cx(i,s,p.l),y=ys(v);
+    if(!go14){ctx.moveTo(x,y);go14=true;}else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // 軸ラベル（最大値）
+  const alx=isMob()?w-p.r-2:w-p.r+65;
+  ctx.fillStyle='#484f58';ctx.font='9px monospace';ctx.textAlign='right';
+  ctx.fillText(fmt(maxAll,1),alx,p.t+9);
+
+  // 現在値ライン（ATR14 のみ）
+  let curV14=null;
+  for(let i=e-1;i>=s;i--){if(ATR_DATA[i]!=null){curV14=ATR_DATA[i];break;}}
+  if(curV14!=null){
+    const cy=ys(curV14);
+    ctx.strokeStyle='rgba(77,208,225,0.3)';ctx.lineWidth=0.5;ctx.setLineDash([2,3]);
+    ctx.beginPath();ctx.moveTo(p.l,cy);ctx.lineTo(w-p.r,cy);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#4dd0e1';ctx.font='bold 9px monospace';ctx.textAlign='right';
+    ctx.fillText(fmt(curV14,1),alx,cy+3.5);
+  }
+
+  drawFireVLines(ctx,s,e,p,null);
+
+  // クロスヘア
+  if(XH.on&&XH.idx>=0){
+    const xBar=cx(XH.idx,s,p.l);
+    if(xBar>=p.l&&xBar<=w-p.r){
+      ctx.strokeStyle='rgba(139,148,158,.35)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.moveTo(xBar,p.t);ctx.lineTo(xBar,h-p.b);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle='rgba(212,168,83,.6)';ctx.lineWidth=1;
+      ctx.strokeRect(xBar-V.barW/2-1,p.t,V.barW+2,ph);
+      const av=ATR_DATA[XH.idx];
+      if(av!=null){
+        const ay=ys(av);
+        if(isMob()){
+          ctx.fillStyle='#00838f';ctx.fillRect(w-p.r-68,ay-7,66,14);
+          ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+          ctx.fillText(fmt(av,1),w-p.r-35,ay+3.5);
+        }else{
+          ctx.fillStyle='#00838f';ctx.fillRect(w-p.r+1,ay-7,65,14);
+          ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+          ctx.fillText(fmt(av,1),w-p.r+1+32.5,ay+3.5);
         }
       }
     }
@@ -1724,6 +1984,7 @@ function drawAll(){
     if(IND.vol)  drawVol();
     if(IND.macd) drawMacd();
     if(IND.rsi)  drawRsi();
+    if(IND.atr)  drawAtr();
     drawSig();
     updateSB();
   });
@@ -1773,6 +2034,7 @@ function updTooltip(i){
   $('xh-l').textContent=fmt(d.low);
   const ce=$('xh-c');ce.textContent=fmt(d.close);ce.className='xh-val '+(bull?'bull':'bear');
   $('xh-v').textContent=fvol(d.vol);
+  $('xh-volma').textContent=VOL_MA20[i]!=null?fvol(VOL_MA20[i]):'—';
 
   $('xh-sep-ma').style.display=IND.ma?'':'none';
   $('xh-rows-ma').style.display=IND.ma?'':'none';
@@ -1801,6 +2063,18 @@ function updTooltip(i){
   $('xh-sep-rsi').style.display=IND.rsi?'':'none';
   $('xh-rows-rsi').style.display=IND.rsi?'':'none';
   if(IND.rsi) $('xh-rsi').textContent=RSI_DATA[i]!=null?RSI_DATA[i].toFixed(1):'—';
+
+  $('xh-sep-atr').style.display=IND.atr?'':'none';
+  $('xh-rows-atr').style.display=IND.atr?'':'none';
+  if(IND.atr){
+    const av=ATR_DATA[i];
+    if(av!=null&&d.close>0){
+      const pct=(av/d.close*100).toFixed(2);
+      $('xh-atr').textContent=fmt(av,1)+'（'+pct+'%）';
+    }else{
+      $('xh-atr').textContent=av!=null?fmt(av,1):'—';
+    }
+  }
 
   const divSig=IND.macd?DIV_DATA.find(d=>d.idx2===i):null;
   $('xh-sep-div').style.display=divSig?'':'none';
@@ -1837,7 +2111,7 @@ function updTooltip(i){
   tip.style.display='block';
 }
 
-const ALL_PANES=['pane-main','pane-vol','pane-macd','pane-rsi','pane-sig'];
+const ALL_PANES=['pane-main','pane-vol','pane-macd','pane-rsi','pane-atr','pane-sig'];
 
 function onMove(e,paneId){
   const pane=$(paneId),r=pane.getBoundingClientRect(),localX=e.clientX-r.left;
@@ -1933,7 +2207,7 @@ window.addEventListener('mouseup',()=>{sbOn=false;$('sba').classList.remove('dr'
    INDICATOR TOGGLE
 ═══════════════════════════════════════════ */
 function updIndBtns(){
-  ['ma','bb','vol','macd','rsi'].forEach(k=>{
+  ['ma','bb','vol','macd','rsi','atr'].forEach(k=>{
     const btn=$('ind-'+k);if(btn)btn.className='tf-btn'+(IND[k]?' active':'');
   });
 }
@@ -1941,12 +2215,13 @@ function updPanes(){
   $('pane-vol').style.display  =IND.vol  ?'':'none';
   $('pane-macd').style.display =IND.macd ?'':'none';
   $('pane-rsi').style.display  =IND.rsi  ?'':'none';
+  $('pane-atr').style.display  =IND.atr  ?'':'none';
 }
 function toggleInd(key){
   IND[key]=!IND[key];
   updIndBtns(); updPanes(); drawAll();
 }
-['ma','bb','vol','macd','rsi'].forEach(k=>$('ind-'+k).addEventListener('click',()=>toggleInd(k)));
+['ma','bb','vol','macd','rsi','atr'].forEach(k=>$('ind-'+k).addEventListener('click',()=>toggleInd(k)));
 
 /* ═══════════════════════════════════════════
    OVERLAY TOGGLE
@@ -1961,6 +2236,9 @@ function updOvlBtns(){
   const eBtnEl=$('ovl-earnings');
   eBtnEl.disabled  =EARNINGS.length===0;
   eBtnEl.className ='tf-btn'+(OVL_EARNINGS&&EARNINGS.length>0?' active':'');
+  const fBtnEl=$('ovl-fire');
+  fBtnEl.disabled  =FIRE_START_SET.size===0;
+  fBtnEl.className ='tf-btn'+(OVL_FIRE&&FIRE_START_SET.size>0?' active':'');
 }
 $('ovl-hline').addEventListener('click',()=>{OVL.hlineMode=cycleMode(OVL.hlineMode);updOvlBtns();drawAll();});
 $('ovl-trend').addEventListener('click',()=>{OVL.trend=!OVL.trend;updOvlBtns();drawAll();});
@@ -1968,6 +2246,10 @@ $('ovl-breakout').addEventListener('click',()=>{OVL.breakout=!OVL.breakout;updOv
 $('ovl-earnings').addEventListener('click',()=>{
   if(EARNINGS.length===0)return;
   OVL_EARNINGS=!OVL_EARNINGS;updOvlBtns();drawAll();
+});
+$('ovl-fire').addEventListener('click',()=>{
+  if(FIRE_START_SET.size===0)return;
+  OVL_FIRE=!OVL_FIRE;updOvlBtns();drawAll();
 });
 $('fi-earnings').addEventListener('change',e=>{
   const f=e.target.files[0];if(f)loadEarningsCSV(f);e.target.value='';
@@ -1984,11 +2266,16 @@ function loadData(rows,name){
   const c=rows.map(r=>r.close);
   MA5=sma(c,5);MA25=sma(c,25);MA75=sma(c,75);
   MD=calcMACD(c); BB=calcBB(c); RSI_DATA=calcRSI(c);
+  ATR_DATA=calcATR(14);
+  ATR60_DATA=calcATR(60);
+  VOL_MA20=sma(rows.map(r=>r.vol||0),20);
   calcSignals();
+  FIRE_START_SET=computeFireClusterStarts();
   const w=$('pane-main').clientWidth||300;
   V.offset=Math.max(0,DATA.length-visCnt(w,PAD.main));
   $('empty').style.display='none';
   if(name!=null)$('sname').textContent=name;
+  $('ovl-fire').disabled=FIRE_START_SET.size===0;
   updTFBtns(); updIBLast(); drawAll();
 }
 
@@ -2012,7 +2299,7 @@ $('tf-btn-w').addEventListener('click',()=>switchFrame('w'));
 
 
 const ro=new ResizeObserver(()=>{if(DATA.length)V.offset=clamp(V.offset);drawAll();});
-ro.observe($('pane-main'));ro.observe($('pane-vol'));ro.observe($('pane-macd'));ro.observe($('pane-rsi'));ro.observe($('pane-sig'));
+ro.observe($('pane-main'));ro.observe($('pane-vol'));ro.observe($('pane-macd'));ro.observe($('pane-rsi'));ro.observe($('pane-atr'));ro.observe($('pane-sig'));
 
 /* ═══════════════════════════════════════════
    FINANCIAL DATA
